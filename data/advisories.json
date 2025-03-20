@@ -1,0 +1,77 @@
+{
+  "advisories": [
+    {
+      "id": "GHA-NPM-EXPRESS-1",
+      "ecosystem": "npm",
+      "package": "express",
+      "vulnerable_versions": "<=4.17.0",
+      "patched_versions": ">=4.17.1",
+      "title": "Path Traversal Vulnerability in Express",
+      "description": "Versions of express prior to 4.17.1 are vulnerable to path traversal attacks.",
+      "severity": "high",
+      "cve_id": "CVE-2019-123456",
+      "published_at": "2019-05-26T00:00:00Z"
+    },
+    {
+      "id": "GHA-NPM-LODASH-1",
+      "ecosystem": "npm",
+      "package": "lodash",
+      "vulnerable_versions": "<4.17.21",
+      "patched_versions": ">=4.17.21",
+      "title": "Prototype Pollution in Lodash",
+      "description": "Versions of lodash prior to 4.17.21 are vulnerable to prototype pollution attacks.",
+      "severity": "critical",
+      "cve_id": "CVE-2021-23337",
+      "published_at": "2021-02-15T00:00:00Z"
+    },
+    {
+      "id": "GHA-PIP-REQUESTS-1",
+      "ecosystem": "pip",
+      "package": "requests",
+      "vulnerable_versions": "<=2.25.0",
+      "patched_versions": ">=2.25.1",
+      "title": "CRLF Injection in Requests",
+      "description": "Versions of requests prior to 2.25.1 are vulnerable to CRLF injection attacks.",
+      "severity": "medium",
+      "cve_id": "CVE-2021-123457",
+      "published_at": "2021-01-15T00:00:00Z"
+    },
+    {
+      "id": "GHA-PIP-FLASK-1",
+      "ecosystem": "pip",
+      "package": "flask",
+      "vulnerable_versions": "<1.1.3,>=1.0",
+      "patched_versions": ">=1.1.3",
+      "title": "Cookie Session Fixation in Flask",
+      "description": "Versions of flask from 1.0 to 1.1.2 are vulnerable to session fixation attacks.",
+      "severity": "high",
+      "cve_id": "CVE-2021-123458",
+      "published_at": "2021-03-10T00:00:00Z"
+    },
+    {
+      "id": "GHA-NPM-AXIOS-1",
+      "ecosystem": "npm",
+      "package": "axios",
+      "vulnerable_versions": "<0.21.1",
+      "patched_versions": ">=0.21.1",
+      "title": "Server-Side Request Forgery in Axios",
+      "description": "Versions of axios prior to 0.21.1 are vulnerable to SSRF attacks.",
+      "severity": "high",
+      "cve_id": "CVE-2020-28168",
+      "published_at": "2021-01-05T00:00:00Z"
+    },
+    {
+      "id": "GHA-PIP-DJANGO-1",
+      "ecosystem": "pip",
+      "package": "django",
+      "vulnerable_versions": "<3.1.8,>=3.1.0",
+      "patched_versions": ">=3.1.8",
+      "title": "SQL Injection in Django",
+      "description": "Versions of django from 3.1.0 to 3.1.7 are vulnerable to SQL injection attacks.",
+      "severity": "critical",
+      "cve_id": "CVE-2021-28658",
+      "published_at": "2021-04-01T00:00:00Z"
+    }
+  ],
+  "last_updated": "2023-08-15T00:00:00Z"
+} 

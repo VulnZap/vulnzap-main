@@ -1,0 +1,57 @@
+# Development files
+.vscode/
+.idea/
+.env
+.env.example
+.git/
+.gitignore
+*.log
+npm-debug.log*
+
+# Testing
+test/
+tests/
+*.test.js
+*.spec.js
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Source control
+.github/
+.gitlab/
+
+# Build tools
+webpack.config.js
+babel.config.js
+tsconfig.json
+rollup.config.js
+
+# Miscellaneous
+node_modules/
+coverage/
+.DS_Store
+Thumbs.db
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg 
