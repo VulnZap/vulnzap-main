@@ -1,5 +1,28 @@
-import { Server as McpServer } from '@modelcontextprotocol/sdk/dist/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/dist/server/stdio.js';
+// Fix import paths for SDK
+let McpServer, StdioServerTransport;
+
+// Try both possible import paths and use whichever one works
+try {
+  const serverModule = await import('@modelcontextprotocol/sdk/dist/server/index.js');
+  const stdioModule = await import('@modelcontextprotocol/sdk/dist/server/stdio.js');
+  McpServer = serverModule.Server;
+  StdioServerTransport = stdioModule.StdioServerTransport;
+} catch (err) {
+  try {
+    console.log("First import path failed, trying alternative path...");
+    // When installed globally, sometimes the path gets doubled
+    const serverModule = await import('@modelcontextprotocol/sdk/dist/dist/server/index.js');
+    const stdioModule = await import('@modelcontextprotocol/sdk/dist/dist/server/stdio.js');
+    McpServer = serverModule.Server;
+    StdioServerTransport = stdioModule.StdioServerTransport;
+  } catch (err2) {
+    console.error("ERROR: Failed to import MCP SDK modules.");
+    console.error("This is likely due to an installation issue with @modelcontextprotocol/sdk");
+    console.error(err2);
+    process.exit(1);
+  }
+}
+
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';

@@ -1,6 +1,6 @@
 {
   "name": "vulnzap-mcp",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Multi-ecosystem vulnerability scanning service with MCP interface for LLMs",
   "main": "index.js",
   "type": "module",
