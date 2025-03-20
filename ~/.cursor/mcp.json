@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "GitHub": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@smithery/cli@latest",
+        "run",
+        "@smithery-ai/github",
+        "--config",
+        "\"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}\""
+      ]
+    },
+    "VulnZap": {
+      "command": "/Users/yagizerkamcelebi/Desktop/vulnzap/vulnzap-bin.js",
+      "args": [
+        "--nvd-key", "627b7aa2-fb92-462c-9737-e726f1c79916",
+        "--github-token", "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",
+        "--premium-key", "test123",
+        "--no-spin"
+      ]
+    }
+  }
+} 

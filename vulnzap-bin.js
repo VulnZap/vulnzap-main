@@ -11,6 +11,18 @@
 import { createServer } from 'http';
 import { stdin, stdout } from 'process';
 
+// Import package.json to get version dynamically
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+let packageVersion = '1.1.1'; // Default fallback
+try {
+  const packageJson = require('./package.json');
+  packageVersion = packageJson.version;
+  console.log(`Using package version: ${packageVersion}`);
+} catch (error) {
+  console.warn(`Warning: Unable to load package.json for version info: ${error.message}`);
+}
+
 // Parse CLI arguments
 const args = process.argv.slice(2);
 const flags = {};
@@ -30,7 +42,7 @@ for (let i = 0; i < args.length; i++) {
 
 // Handle help and version commands
 if (flags.version || flags.v) {
-  console.log('VulnZap MCP v1.1.1');
+  console.log(`VulnZap MCP v${packageVersion}`);
   process.exit(0);
 }
 
@@ -85,11 +97,20 @@ const PORT = flags.port || process.env.PORT || 3000;
 const API_KEY = process.env.PREMIUM_API_KEY || 'test123';
 const NVD_KEY = process.env.NVD_API_KEY || '';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const DISABLE_SPIN = flags['no-spin'] || flags.nospin || false;
 
-// Print environment info
-console.log(`Environment loaded - NVD API Key: ${NVD_KEY ? 'Yes (hidden)' : 'No'}`);
-console.log(`Environment loaded - GitHub Token: ${GITHUB_TOKEN ? 'Yes (hidden)' : 'No'}`);
-console.log(`Premium API Key: ${API_KEY ? 'Yes (configured)' : 'No'}`);
+// Disable spinner if requested
+if (DISABLE_SPIN) {
+  process.stderr.write('\u001B[?25h'); // Show cursor
+  console.log('Spinner/cursor animation disabled');
+}
+
+// Print environment info with improved formatting
+console.log('Environment configuration:');
+console.log(`- NVD API Key: ${NVD_KEY ? 'Yes (hidden)' : 'No'}`);
+console.log(`- GitHub Token: ${GITHUB_TOKEN ? 'Yes (hidden)' : 'No'}`);
+console.log(`- Premium API Key: ${API_KEY ? 'Yes (configured)' : 'No'}`);
+console.log(`- Protocol version: JSONRPC 2.0`);
 
 // MCP server implementation
 console.log("Starting Vulnzap MCP Server...");
@@ -99,11 +120,12 @@ const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ 
     status: 'running', 
-    version: '1.1.1',
+    version: packageVersion,
     integrations: {
       nvd: !!NVD_KEY,
       github: !!GITHUB_TOKEN
-    }
+    },
+    protocol: 'MCP/JSONRPC 2.0'
   }));
 });
 
@@ -135,9 +157,15 @@ function processBuffer() {
   
   try {
     const request = JSON.parse(message);
+    console.log(`[REQUEST ${new Date().toISOString()}] ID: ${request.id}, Method: ${request.method}`);
+    if (request.params) {
+      console.log(`[REQUEST PARAMS] ${JSON.stringify(request.params).substring(0, 150)}${JSON.stringify(request.params).length > 150 ? '...' : ''}`);
+    }
+    
     handleRequest(request);
   } catch (e) {
-    console.error('Error parsing message:', e);
+    console.error(`[ERROR] Error parsing message: ${e.message}`);
+    console.error(`[ERROR] Message content: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`);
   }
   
   // Check if there are more messages
@@ -168,7 +196,7 @@ function handleRequest(request) {
       console.log("Received initialize request");
       sendResponse(request.id, {
         name: "VulnZap MCP",
-        version: "1.1.0",
+        version: packageVersion,
         vendor: "VulnZap"
       });
     } else if (request.method === 'capabilities/list') {
@@ -534,20 +562,59 @@ function handleDetailedReport(request) {
   }
 }
 
-// Send MCP response
+// Send MCP response with improved logging
 function sendResponse(id, result, error) {
-  const response = {
-    jsonrpc: '2.0',
-    id
-  };
-  
-  if (error) {
-    response.error = error;
-  } else {
-    response.result = result;
+  try {
+    const response = {
+      jsonrpc: '2.0',
+      id
+    };
+    
+    if (error) {
+      response.error = error;
+      console.log(`[RESPONSE ERROR] ID: ${id}, Error: ${error.code} - ${error.message}`);
+    } else {
+      response.result = result;
+      console.log(`[RESPONSE SUCCESS] ID: ${id}, Result type: ${result ? typeof result : 'null'}`);
+      
+      if (result) {
+        const resultStr = JSON.stringify(result);
+        console.log(`[RESPONSE CONTENT] ${resultStr.substring(0, 150)}${resultStr.length > 150 ? '...' : ''}`);
+      }
+    }
+    
+    // Send the response and ensure it's flushed
+    const responseStr = JSON.stringify(response) + '\n';
+    const writeSuccess = stdout.write(responseStr, (err) => {
+      if (err) {
+        console.error(`[ERROR] Failed to write response: ${err.message}`);
+      } else {
+        console.log(`[DEBUG] Response for ID ${id} successfully written and flushed`);
+      }
+    });
+    
+    if (!writeSuccess) {
+      console.warn(`[WARN] Response buffer full, waiting for drain event`);
+      stdout.once('drain', () => {
+        console.log(`[DEBUG] Buffer drained, continuing`);
+      });
+    }
+  } catch (e) {
+    console.error(`[FATAL] Error creating or sending response: ${e.message}`);
+    try {
+      // Try to send a simpler error response
+      stdout.write(JSON.stringify({
+        jsonrpc: '2.0',
+        id: id || 'unknown',
+        error: {
+          code: -32603,
+          message: `Internal error: ${e.message}`
+        }
+      }) + '\n');
+    } catch (innerError) {
+      console.error(`[FATAL] Failed to send error response: ${innerError.message}`);
+    }
   }
-  
-  stdout.write(JSON.stringify(response) + '\n');
 }
 
 // Keep the process running and listen for signals
