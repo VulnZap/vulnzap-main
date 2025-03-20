@@ -30,7 +30,7 @@ for (let i = 0; i < args.length; i++) {
 
 // Handle help and version commands
 if (flags.version || flags.v) {
-  console.log('VulnZap MCP v1.0.9');
+  console.log('VulnZap MCP v1.1.1');
   process.exit(0);
 }
 
@@ -99,7 +99,7 @@ const server = createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ 
     status: 'running', 
-    version: '1.0.9',
+    version: '1.1.1',
     integrations: {
       nvd: !!NVD_KEY,
       github: !!GITHUB_TOKEN
@@ -154,6 +154,8 @@ function handleRequest(request) {
   }
   
   try {
+    console.log(`Received request: ${request.method}`);
+    
     // Handle based on method and parameters
     if (request.method === 'resources/read' && request.params && request.params.uri.startsWith('vuln://')) {
       handleVulnerabilityCheck(request);
@@ -161,17 +163,67 @@ function handleRequest(request) {
       handleBatchScan(request);
     } else if (request.method === 'tools/invoke' && request.params.name === 'detailed-report') {
       handleDetailedReport(request);
-    } else if (request.method === 'initialize' || request.method === 'capabilities') {
-      // Handle initialization and capabilities
-      sendResponse(request.id, { 
-        version: '1.0.9',
-        capabilities: {
-          url_protocol_handlers: ['vuln'],
-          tools: ['batch-scan', 'detailed-report']
-        }
+    } else if (request.method === 'initialize') {
+      // Initialize protocol
+      console.log("Received initialize request");
+      sendResponse(request.id, {
+        name: "VulnZap MCP",
+        version: "1.1.0",
+        vendor: "VulnZap"
+      });
+    } else if (request.method === 'capabilities/list') {
+      // Handle capabilities request
+      console.log("Received capabilities request");
+      sendResponse(request.id, {
+        url_protocol_handlers: [
+          {
+            protocol: "vuln",
+            description: "Vulnerability scanning for packages"
+          }
+        ],
+        tools: [
+          {
+            name: "batch-scan",
+            description: "Scan multiple packages for vulnerabilities",
+            parameters: {
+              type: "object",
+              properties: {
+                packages: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      ecosystem: { type: "string" },
+                      packageName: { type: "string" },
+                      packageVersion: { type: "string" }
+                    },
+                    required: ["ecosystem", "packageName", "packageVersion"]
+                  }
+                },
+                apiKey: { type: "string" }
+              },
+              required: ["packages"]
+            }
+          },
+          {
+            name: "detailed-report",
+            description: "Get a detailed vulnerability report for a package",
+            parameters: {
+              type: "object",
+              properties: {
+                ecosystem: { type: "string" },
+                packageName: { type: "string" },
+                packageVersion: { type: "string" },
+                apiKey: { type: "string" }
+              },
+              required: ["ecosystem", "packageName", "packageVersion"]
+            }
+          }
+        ]
       });
     } else {
       // Method not supported
+      console.log(`Method not implemented: ${request.method}`);
       sendResponse(request.id, null, { 
         code: 'not_implemented', 
         message: `Method ${request.method} not implemented` 
