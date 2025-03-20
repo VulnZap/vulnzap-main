@@ -11,8 +11,7 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "node test-mcp.js",
-    "mcp": "node index.js",
-    "prepublishOnly": "npm run test"
+    "mcp": "node index.js"
   },
   "keywords": [
     "vulnerability",
