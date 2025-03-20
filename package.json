@@ -1,11 +1,11 @@
 {
   "name": "vulnzap-mcp",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "description": "Multi-ecosystem vulnerability scanning service with MCP interface for LLMs",
   "main": "index.js",
   "type": "module",
   "bin": {
-    "vulnzap": "./index-wrapper.cjs"
+    "vulnzap": "./standalone-server.js"
   },
   "scripts": {
     "start": "node index.js",
@@ -41,7 +41,7 @@
   "files": [
     "bin",
     "index.js",
-    "index-wrapper.cjs",
+    "standalone-server.js",
     "github-client.js",
     "nvd-client.js",
     "data"
