@@ -17,6 +17,44 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const packagePath = path.resolve(__dirname, '..');
 
+// Create a temporary fix file to handle module import issues
+const fixImportsPath = path.join(packagePath, 'fix-imports.js');
+const fixFileContent = `
+// This file is a temporary fix for the module import issues
+// It checks for the correct paths to the MCP SDK modules and exports them
+
+let McpServer, StdioServerTransport;
+
+try {
+  // Try the standard path first
+  const serverModule = await import('@modelcontextprotocol/sdk/dist/server/index.js');
+  const stdioModule = await import('@modelcontextprotocol/sdk/dist/server/stdio.js');
+  
+  McpServer = serverModule.Server;
+  StdioServerTransport = stdioModule.StdioServerTransport;
+} catch (err) {
+  try {
+    // Try the double dist path that happens in some installs
+    console.log("First import path failed, trying alternative path...");
+    const serverModule = await import('@modelcontextprotocol/sdk/dist/dist/server/index.js');
+    const stdioModule = await import('@modelcontextprotocol/sdk/dist/dist/server/stdio.js');
+    
+    McpServer = serverModule.Server;
+    StdioServerTransport = stdioModule.StdioServerTransport;
+  } catch (err2) {
+    console.error("ERROR: Failed to import MCP SDK modules.");
+    console.error("This is likely an installation issue with the @modelcontextprotocol/sdk package.");
+    console.error("Please try reinstalling the package with: npm install -g vulnzap-mcp");
+    process.exit(1);
+  }
+}
+
+export { McpServer, StdioServerTransport };
+`;
+
+// Write the fix file
+fs.writeFileSync(fixImportsPath, fixFileContent);
+
 // Parse command-line arguments
 const args = process.argv.slice(2);
 const flags = {};
@@ -95,9 +133,9 @@ if (flags['premium-key']) {
   env.PREMIUM_API_KEY = flags['premium-key'];
 }
 
-// Start the server
+// Start the server with the fixed imports
 console.log('Starting VulnZap MCP server...');
-const serverProcess = spawn('node', [path.join(packagePath, 'index.js')], {
+const serverProcess = spawn('node', ['--experimental-modules', path.join(packagePath, 'index-fixed.js')], {
   env,
   stdio: 'inherit'
 });

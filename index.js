@@ -42,6 +42,8 @@ let vulnerabilityDatabase = new Map();
 let nvdConfig = null;
 let githubConfig = null;
 
+// Dynamic import of MCP SDK components
+
 /**
  * Load vulnerability data from the GitHub Advisory Database file
  * This function reads the JSON file and transforms it into an efficient in-memory structure
