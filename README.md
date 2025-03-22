@@ -42,6 +42,58 @@ vulnzap --github-token YOUR_GITHUB_TOKEN
 
 # Start with both integrations for comprehensive scanning
 vulnzap --nvd-key YOUR_NVD_API_KEY --github-token YOUR_GITHUB_TOKEN
+
+# Use custom ports to avoid conflicts
+vulnzap --port 3001 --health-port 3002
+```
+
+### Port Configuration
+
+VulnZap uses two ports:
+- **MCP Server Port**: Default is 3001 (used for the main MCP communication)
+- **Health Check Port**: Default is 3002 (used for the HTTP health check endpoint)
+
+If you encounter port conflicts (EADDRINUSE errors), you can:
+
+1. **Configure through command line arguments**:
+   ```bash
+   vulnzap --port 3001 --health-port 3002
+   ```
+
+2. **Set environment variables**:
+   ```bash
+   export PORT=3001
+   export HEALTH_PORT=3002
+   vulnzap
+   ```
+
+3. **Create a .env file** in your project directory:
+   ```
+   PORT=3001
+   HEALTH_PORT=3002
+   ```
+
+### Using with MCP Inspector
+
+When using the MCP Inspector with VulnZap, you need to specify the server port:
+
+```bash
+# Start VulnZap first
+vulnzap --port 3001 --health-port 3002
+
+# In another terminal, run MCP Inspector with the correct server port
+npx @modelcontextprotocol/inspector vulnzap --server-port 3001
+```
+
+The inspector will typically use port 5173 for its web interface. If that port is in use:
+
+```bash
+# Find and kill the process using port 5173
+lsof -i :5173
+kill -9 <PID>
+
+# Or specify a different inspector port
+npx @modelcontextprotocol/inspector vulnzap --server-port 3001 --inspector-port 5174
 ```
 
 ### Connecting to LLM Clients

@@ -55,16 +55,19 @@ USAGE:
 
 OPTIONS:
   --help, -h            Show this help message
-  --port PORT           Set the server port (default: 3000)
+  --port PORT           Set the MCP server port (default: 3001)
+  --health-port PORT    Set the health check server port (default: 3002)
   --nvd-key KEY         Set the NVD API key
   --github-token TOKEN  Set the GitHub API token
   --data-path PATH      Set the path to the advisories file
   --premium-key KEY     Set the premium API key
   --verbose             Enable verbose logging
   --version, -v         Show version information
+  --no-spin             Disable spinner animation
 
 EXAMPLES:
   vulnzap                                  # Start the server with default settings
+  vulnzap --port 3001 --health-port 3002   # Start with custom ports
   vulnzap --nvd-key YOUR_KEY               # Start with NVD integration
   vulnzap --github-token YOUR_TOKEN        # Start with GitHub integration
   vulnzap --nvd-key KEY --github-token KEY # Start with both NVD and GitHub
@@ -93,7 +96,8 @@ if (flags['data-path']) {
 }
 
 // Configuration
-const PORT = flags.port || process.env.PORT || 3000;
+const PORT = flags.port || process.env.PORT || 3001;
+const HEALTH_PORT = flags['health-port'] || process.env.HEALTH_PORT || 3002;
 const API_KEY = process.env.PREMIUM_API_KEY || 'test123';
 const NVD_KEY = process.env.NVD_API_KEY || '';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
@@ -130,9 +134,9 @@ const server = createServer((req, res) => {
 });
 
 // Start HTTP server
-server.listen(PORT, () => {
-  console.log(`HTTP health check server listening on port ${PORT}`);
-  console.log(`Visit http://localhost:${PORT} to check server status`);
+server.listen(HEALTH_PORT, () => {
+  console.log(`HTTP health check server listening on port ${HEALTH_PORT}`);
+  console.log(`Visit http://localhost:${HEALTH_PORT} to check server status`);
 });
 
 // Buffer for MCP messages

@@ -1,6 +1,6 @@
 {
   "name": "vulnzap-mcp",
-  "version": "1.1.2",
+  "version": "1.2.1",
   "description": "Multi-ecosystem vulnerability scanning service with MCP interface for LLMs",
   "main": "index.js",
   "type": "module",
@@ -12,6 +12,18 @@
     "dev": "nodemon vulnzap-bin.js --no-spin",
     "test": "node test-mcp.js",
     "mcp": "node vulnzap-bin.js --no-spin"
+  },
+  "config": {
+    "env": {
+      "PORT": "Default 3001. Main MCP server port.",
+      "HEALTH_PORT": "Default 3002. Health check server port.",
+      "NVD_API_KEY": "NVD (National Vulnerability Database) API key",
+      "GITHUB_TOKEN": "GitHub API token for Advisory Database access",
+      "PREMIUM_API_KEY": "API key for premium features",
+      "USE_NVD": "Set to 'true' to enable NVD integration",
+      "DATA_PATH": "Path to vulnerability database file",
+      "GITHUB_REFRESH_INTERVAL": "Database refresh interval in milliseconds"
+    }
   },
   "keywords": [
     "vulnerability",
@@ -44,10 +56,11 @@
     "vulnzap-bin.js",
     "github-client.js",
     "nvd-client.js",
-    "data"
+    "data",
+    "src/**/*"
   ],
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.1",
+    "@modelcontextprotocol/sdk": "^0.6.1",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",
