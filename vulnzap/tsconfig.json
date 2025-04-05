@@ -9,8 +9,11 @@
     "declaration": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "baseUrl": ".",
+    "allowJs": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "bin/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 } 

@@ -4,15 +4,24 @@ import { program } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import inquirer from 'inquirer';
-import { startMcpServer, checkVulnerability, getBatchStatus } from '../dist/index.js';
-import { version } from '../package.json';
-import * as auth from '../dist/auth/supabase.js';
-import * as payment from '../dist/payment/stripe.js';
+import { startMcpServer, checkVulnerability, getBatchStatus } from '../src/index.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import * as auth from '../src/auth/supabase.js';
+import * as payment from '../src/payment/stripe.js';
 import qrcode from 'qrcode-terminal';
 import open from 'open';
 import { v4 as uuidv4 } from 'uuid';
 import { createClient, Provider } from '@supabase/supabase-js';
-import { config } from '../dist/config/config.js';
+import { config } from '../src/config/config.js';
+import { User } from '@supabase/supabase-js';
+
+// Get package version
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const packageJson = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
+const version = packageJson.version;
 
 // Banner display
 const displayBanner = () => {
@@ -86,7 +95,7 @@ program
       }
       
       console.log('Press Ctrl+C to stop the security bridge');
-    } catch (error) {
+    } catch (error: any) {
       spinner.fail('Failed to start VulnZap security bridge');
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
@@ -146,7 +155,7 @@ program
       } else {
         console.log(chalk.green(`✓ Safe: ${packageName}@${packageVersion} has no known vulnerabilities\n`));
       }
-    } catch (error) {
+    } catch (error: any) {
       spinner.fail('Vulnerability check failed');
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
@@ -466,7 +475,7 @@ program
     
     // Check if already logged in
     const isLoggedIn = await auth.isAuthenticated();
-    let user = null;
+    let user: User | null = null;
     
     if (isLoggedIn) {
       user = await auth.getCurrentUser();

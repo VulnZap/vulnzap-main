@@ -12,6 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import semver from 'semver';
 import dotenv from 'dotenv';
+import { z } from 'zod';
 
 // Loading environment variables
 dotenv.config();
@@ -82,6 +83,11 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
   const server = new McpServer({
     name: "VulnZap",
     version: "1.0.0"
+  }, {
+    capabilities: {
+      resources: {},
+      tools: {}
+    },
   });
 
   // Define resources and tools
@@ -118,13 +124,16 @@ function setupVulnerabilityResource(server: McpServer): void {
         const { ecosystem, packageName, packageVersion } = params;
         
         // Check if package is vulnerable
-        const result = await checkVulnerability(ecosystem, packageName, packageVersion);
+        const version = Array.isArray(packageVersion) ? packageVersion[0] : packageVersion;
+        const ecosystemList = Array.isArray(ecosystem) ? ecosystem[0] : ecosystem;
+        const packageNameList = Array.isArray(packageName) ? packageName[0] : packageName;
+        const result = await checkVulnerability(ecosystemList, packageNameList, version);
         
         // Construct response
         if (result.error) {
           // Return error response
           return {
-            error: result.error
+            contents: []
           };
         } else {
           // Determine status based on vulnerability and whether it's known
@@ -153,14 +162,68 @@ function setupVulnerabilityResource(server: McpServer): void {
           return {
             contents: [{
               uri: uri.href,
-              text: content
+              text: content,
+              mimeType: "text/plain"
             }]
           };
         }
       } catch (error: any) {
         console.error(`Error processing vulnerability check: ${error.message}`);
         return {
-          error: `Internal server error: ${error.message}`
+          contents: [{
+            uri: uri.href,
+            text: `Internal server error: ${error.message}`,
+            mimeType: "text/plain"
+          }]
+        };
+      }
+    }
+  );
+
+  // Add npm install interception
+  server.tool(
+    "npm-install",
+    "Intercept npm install commands and check for vulnerabilities",
+    {
+      parameters: z.object({
+        command: z.string(),
+        packageName: z.string(),
+        version: z.string().optional()
+      })
+    },
+    async ({ parameters }) => {
+      try {
+        const { packageName, version } = parameters;
+        const result = await checkVulnerability('npm', packageName, version || 'latest');
+        
+        if (result.isVulnerable) {
+          return {
+            content: [{
+              type: "text",
+              text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n` +
+                    result.advisories?.map(adv => 
+                      `- ${adv.title} (${adv.severity})\n` +
+                      `  CVE: ${adv.cve_id || 'N/A'}\n` +
+                      `  Description: ${adv.description}\n` +
+                      `  Fixed in: ${result.fixedVersions?.join(', ') || 'N/A'}`
+                    ).join('\n\n') + 
+                    `\n\nRecommendation: ${result.message}`
+            }]
+          };
+        }
+        
+        return {
+          content: [{
+            type: "text",
+            text: `✅ ${packageName}@${version} appears to be safe to install.`
+          }]
+        };
+      } catch (error: any) {
+        return {
+          content: [{
+            type: "text",
+            text: `Error checking vulnerabilities: ${error.message}`
+          }]
         };
       }
     }
@@ -177,12 +240,20 @@ function setupPremiumTools(server: McpServer, apiKey: string): void {
   // Premium feature: Batch vulnerability scanning
   server.tool(
     "batch-scan",
-    { 
-      packages: {}, 
-      apiKey: { type: "string" } 
+    "Batch vulnerability scanning for multiple packages",
+    {
+      parameters: z.object({
+        packages: z.array(z.object({
+          ecosystem: z.string(),
+          packageName: z.string(),
+          packageVersion: z.string()
+        })),
+        apiKey: z.string().optional()
+      }) 
     },
-    async ({ packages, apiKey: toolApiKey }) => {
+    async ({ parameters }) => {
       try {
+        const { packages, apiKey: toolApiKey } = parameters;
         // Check API key for premium access
         if (toolApiKey !== apiKey) {
           return {

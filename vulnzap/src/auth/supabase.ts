@@ -280,7 +280,7 @@ export async function getSession(): Promise<Session | null> {
       const { data, error } = await supabase.auth.getSession();
       
       if (!error && data?.session) {
-        await saveSession(data.session, data.user);
+        await saveSession(data.session, data.session.user);
         return data.session;
       }
     }
