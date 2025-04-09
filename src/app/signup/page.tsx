@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -18,8 +18,8 @@ export default function SignUpPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+      <div className='flex items-center justify-center min-h-screen'>
+        <div className='w-8 h-8 border-4 rounded-full border-primary border-t-transparent animate-spin'></div>
       </div>
     );
   }
@@ -27,13 +27,15 @@ export default function SignUpPage() {
   // Only show signup form if not authenticated
   if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="max-w-md w-full">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold">Create Your Account</h1>
-            <p className="text-muted-foreground mt-2">Sign up to secure your dependencies with VulnZap</p>
+      <div className='flex items-center justify-center min-h-screen p-4'>
+        <div className='w-full max-w-md'>
+          <div className='mb-8 text-center'>
+            <h1 className='text-3xl font-bold'>Create Your Account</h1>
+            <p className='mt-2 text-muted-foreground'>
+              Sign up to secure your dependencies with VulnZap
+            </p>
           </div>
-          <LoginForm initialView="sign_up" />
+          <LoginForm initialView='sign_up' />
         </div>
       </div>
     );
@@ -41,4 +43,4 @@ export default function SignUpPage() {
 
   // This will rarely be shown as useEffect will redirect
   return null;
-} 
+}
