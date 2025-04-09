@@ -14,16 +14,16 @@ export function AuthProvider({ children }) {
     // Initialize auth state
     const initAuth = async () => {
       setLoading(true);
-      
+
       // Check for existing session
       const { session: activeSession } = await getSession();
       setSession(activeSession);
-      
+
       if (activeSession) {
         const { user: currentUser } = await getCurrentUser();
         setUser(currentUser);
       }
-      
+
       // Listen for auth changes
       const { data: authListener } = supabase.auth.onAuthStateChange(
         async (event, newSession) => {
@@ -32,15 +32,15 @@ export function AuthProvider({ children }) {
           setLoading(false);
         }
       );
-      
+
       setLoading(false);
-      
+
       // Cleanup listener on unmount
       return () => {
         if (authListener) authListener.subscription.unsubscribe();
       };
     };
-    
+
     initAuth();
   }, []);
 
@@ -68,12 +68,12 @@ export function useAuth() {
 export function withAuth(Component) {
   return function AuthenticatedComponent(props) {
     const { user, loading } = useAuth();
-    
+
     // Show loading state
     if (loading) {
       return <div>Loading...</div>;
     }
-    
+
     // Redirect to login if not authenticated
     if (!user) {
       if (typeof window !== 'undefined') {
@@ -81,8 +81,8 @@ export function withAuth(Component) {
       }
       return null;
     }
-    
+
     // Render component if authenticated
     return <Component {...props} />;
   };
-} 
+}
