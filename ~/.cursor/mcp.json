@@ -14,11 +14,14 @@
     "VulnZap": {
       "command": "/Users/yagizerkamcelebi/Desktop/vulnzap/vulnzap-bin.js",
       "args": [
-        "--nvd-key", "627b7aa2-fb92-462c-9737-e726f1c79916",
-        "--github-token", "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",
-        "--premium-key", "test123",
+        "--nvd-key",
+        "nvd-key",
+        "--github-token",
+        "ghp_github_key",
+        "--premium-key",
+        "test123",
         "--no-spin"
       ]
     }
   }
-} 
+}
