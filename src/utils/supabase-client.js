@@ -8,7 +8,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // Auth helper functions
 export const signInWithEmail = async (email, password) => {
@@ -44,11 +44,11 @@ export const getCurrentUser = async () => {
   return { user: data?.user, error };
 };
 
-export const getSession = async () => {
-  const { data, error } = await supabase.auth.getSession();
-  return { session: data?.session, error };
-};
+// export const getSession = async () => {
+//   const { data, error } = await supabase.auth.getSession();
+//   return { session: data?.session, error };
+// };
 
 export const onAuthStateChange = (callback) => {
   return supabase.auth.onAuthStateChange(callback);
-}; 
+};
