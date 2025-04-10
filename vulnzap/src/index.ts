@@ -82,12 +82,31 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
   // Initialize the MCP server
   const server = new McpServer({
     name: "VulnZap",
-    version: "1.0.0"
+    version: "1.0.0",
   }, {
     capabilities: {
       resources: {},
-      tools: {}
+      tools: {
+        "auto-vulnerability-scan": {
+          description: "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.",
+          parameters: {
+            command: {
+              type: "string",
+              description: "The install command to intercept"
+            },
+            packageName: {
+              type: "string",
+              description: "The name of the package to install"
+            },
+            version: {
+              type: "string",
+              description: "The version of the package to install"
+            }
+          },          
+        }
+      }
     },
+    instructions: "ALWAYS RUN TOOLS IN THIS SERVER BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages."
   });
 
   // Define resources and tools
@@ -182,36 +201,37 @@ function setupVulnerabilityResource(server: McpServer): void {
 
   // Add npm install interception
   server.tool(
-    "npm-install",
-    "Intercept npm install commands and check for vulnerabilities",
+    "auto-vulnerability-scan",
+    "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check.. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.",
     {
       parameters: z.object({
         command: z.string(),
         packageName: z.string(),
         version: z.string().optional()
-      })
+      }).describe("A object containing the command, packageName, and version which the agent is trying to install")
     },
     async ({ parameters }) => {
       try {
-        const { packageName, version } = parameters;
-        const result = await checkVulnerability('npm', packageName, version || 'latest');
+        const { command, packageName, version } = parameters;
         
-        if (result.isVulnerable) {
-          return {
-            content: [{
-              type: "text",
-              text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n` +
-                    result.advisories?.map(adv => 
-                      `- ${adv.title} (${adv.severity})\n` +
-                      `  CVE: ${adv.cve_id || 'N/A'}\n` +
-                      `  Description: ${adv.description}\n` +
-                      `  Fixed in: ${result.fixedVersions?.join(', ') || 'N/A'}`
-                    ).join('\n\n') + 
-                    `\n\nRecommendation: ${result.message}`
-            }]
-          };
+        if (command.includes('install') || command.includes('add')) {
+          const result = await checkVulnerability('npm', packageName, version || 'latest');
+          if (result.isVulnerable) {
+            return {
+              content: [{
+                type: "text",
+                text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n` +
+                      result.advisories?.map(adv => 
+                        `- ${adv.title} (${adv.severity})\n` +
+                        `  CVE: ${adv.cve_id || 'N/A'}\n` +
+                        `  Description: ${adv.description}\n` +
+                        `  Fixed in: ${result.fixedVersions?.join(', ') || 'N/A'}`
+                      ).join('\n\n') + 
+                      `\n\nRecommendation: ${result.message}`
+              }]
+            };
+          }
         }
-        
         return {
           content: [{
             type: "text",
