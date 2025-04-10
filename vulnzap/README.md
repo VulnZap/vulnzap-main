@@ -307,4 +307,64 @@ If you discover a security vulnerability within VulnZap, please send an email to
 - Documentation: [https://docs.vulnzap.dev](https://docs.vulnzap.dev)
 - Discord: [Join our community](https://discord.gg/vulnzap)
 - GitHub Issues: [Report bugs](https://github.com/vulnzap/vulnzap/issues)
-- Email: support@vulnzap.dev 
+- Email: support@vulnzap.dev
+
+# VulnZap MCP Integration with cursor
+
+VulnZap is a security tool that automatically checks for vulnerabilities in packages before installation in your Cursor IDE.
+
+## Prerequisites
+
+- Node.js installed
+- Cursor IDE
+- VulnZap API key
+
+## Setup Instructions
+
+1. Build the project:
+```bash
+npm run build
+```
+
+2. Link the package globally:
+```bash
+npm link
+```
+
+3. Configure Cursor IDE:
+   - Open Cursor Settings
+   - Navigate to the `mcp.json` file
+   - Add the following configuration:
+```json
+{
+  "mcpServers": {
+    "VulnZap": {
+      "command": "vulnzap",
+      "args": ["connect", "--ide", "cursor", "--port", "3456"],
+      "env": {
+        "VULNZAP_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+4. Start VulnZap Server:
+   - Ensure you have set up your environment file with the required credentials
+   - Start the VulnZap server
+
+## Usage
+
+Once configured, VulnZap will automatically:
+- Check for vulnerabilities before package installations
+- Provide security recommendations
+- Prevent installation of vulnerable packages
+
+## Environment Variables
+
+Make sure to set the following environment variables:
+- `VULNZAP_API_KEY`: Your VulnZap API key
+
+## Support
+
+For any issues or questions, please open an issue in the repository. 
