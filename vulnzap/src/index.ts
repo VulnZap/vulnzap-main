@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import semver from 'semver';
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import axios from 'axios';
 
 // Loading environment variables
 dotenv.config();
@@ -88,7 +89,7 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
       resources: {},
       tools: {
         "auto-vulnerability-scan": {
-          description: "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.",
+          description: "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages. The format required for this tool is:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\"\n}\n```",
           parameters: {
             command: {
               type: "string",
@@ -202,7 +203,7 @@ function setupVulnerabilityResource(server: McpServer): void {
   // Add npm install interception
   server.tool(
     "auto-vulnerability-scan",
-    "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check.. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.",
+    "ALWAYS RUN THIS TOOL BEFORE ANY PACKAGE INSTALLATION. This automated security tool must be executed whenever 'npm install', 'pip install', 'yarn add', or any other package installation command is detected. It checks packages for security vulnerabilities and provides recommendations on whether installation should proceed. Do not install any packages without first running this vulnerability check.. It is a rule for the agent to check for vulnerability before suggesting or telling user to install any dependencies or packages.:\n\n```json\n{\n  \"command\": \"npm install\",\n  \"packageName\": \"express\",\n  \"version\": \"4.17.1\"\n}\n```",
     {
       parameters: z.object({
         command: z.string(),
@@ -377,79 +378,103 @@ export async function checkVulnerability(
   packageName: string, 
   packageVersion: string
 ): Promise<VulnerabilityResult> {
-  // Implement vulnerability checking logic
-  // This is a placeholder implementation for the open-source version
-  
-  // Simulate a vulnerability check
-  const isVulnerable = false;
-  
-  // Check for well-known vulnerable packages for demo purposes
-  const knownVulnerabilities: Record<string, VulnerabilityResult> = {
-    'npm:express@4.16.0': {
-      isVulnerable: true,
-      advisories: [
-        {
-          id: 'GHSA-exq6-pr6g-vh2c',
-          title: 'Security Vulnerability in express',
-          severity: 'high',
-          cve_id: 'CVE-2022-24999',
-          description: 'A vulnerability in express allows remote attackers to cause a denial of service.',
-          source: 'github'
-        }
-      ],
-      fixedVersions: ['4.17.3'],
-      message: 'express@4.16.0 has a known vulnerability. Update to 4.17.3 or later.',
-      sources: ['github', 'nvd']
-    },
-    'npm:lodash@4.17.15': {
-      isVulnerable: true,
-      advisories: [
-        {
-          id: 'GHSA-p6mc-m468-83gw',
-          title: 'Prototype Pollution in lodash',
-          severity: 'medium',
-          cve_id: 'CVE-2020-8203',
-          description: 'Prototype pollution vulnerability in the zipObjectDeep function in lodash.',
-          source: 'github'
-        }
-      ],
-      fixedVersions: ['4.17.19'],
-      message: 'lodash@4.17.15 has a prototype pollution vulnerability. Update to 4.17.19 or later.',
-      sources: ['github']
+  try {
+    // Validate API key presence
+    const apiKey = process.env.VULNZAP_API_KEY;
+    if (!apiKey) {
+      return {
+        isVulnerable: false,
+        error: 'VulnZap API key not configured. Please set VULNZAP_API_KEY environment variable.',
+        isUnknown: true
+      };
     }
-  };
-  
-  const key = `${ecosystem}:${packageName}@${packageVersion}`;
-  
-  if (key in knownVulnerabilities) {
-    return knownVulnerabilities[key];
-  }
-  
-  // Check for well-known vulnerable package patterns
-  if (packageName === 'axios' && semver.satisfies(packageVersion, '<0.21.1')) {
+
+    // Fetch vulnerabilities from the API
+    const response = await axios.post('https://vulnzap-server.vercel.app/api/vulnerabilities', {
+      ecosystem,
+      packageName,
+      version: packageVersion
+    }, {
+      headers: {
+        "x-api-key": apiKey
+      }
+    });
+
+    // Extract vulnerability data from response
+    const data = response.data;
+    if (!data.vulnerabilities || !Array.isArray(data.vulnerabilities)) {
+      return {
+        isVulnerable: false,
+        error: 'Invalid response format from API',
+        isUnknown: true
+      };
+    }
+
+    // Get the first vulnerability result (if any)
+    const vulnResult = data.vulnerabilities[0];
+    if (!vulnResult) {
+      return {
+        isVulnerable: false,
+        message: `No vulnerabilities found for ${packageName}@${packageVersion}`,
+        sources: ['vulnzap']
+      };
+    }
+
     return {
-      isVulnerable: true,
-      advisories: [
-        {
-          id: 'GHSA-88mc-qm7p-g5hd',
-          title: 'Server-Side Request Forgery in axios',
-          severity: 'high',
-          cve_id: 'CVE-2020-28168',
-          description: 'Axios is vulnerable to Server-Side Request Forgery (SSRF) when provided with specially crafted URLs.',
-          source: 'github'
+      isVulnerable: vulnResult.isVulnerable,
+      advisories: vulnResult.advisories,
+      message: vulnResult.isVulnerable 
+        ? `${packageName}@${packageVersion} has known vulnerabilities` 
+        : `${packageName}@${packageVersion} appears to be safe`,
+      sources: vulnResult.sources || ['vulnzap']
+    };
+
+  } catch (error: any) {
+    // Handle specific error cases
+    if (axios.isAxiosError(error)) {
+      if (error.response) {
+        switch (error.response.status) {
+          case 401:
+            return {
+              isVulnerable: false,
+              error: 'Unauthorized: Invalid or missing API key',
+              isUnknown: true
+            };
+          case 403:
+            return {
+              isVulnerable: false,
+              error: 'Forbidden: Access denied',
+              isUnknown: true
+            };
+          case 429:
+            return {
+              isVulnerable: false,
+              error: 'Rate limit exceeded. Please try again later.',
+              isUnknown: true
+            };
+          default:
+            return {
+              isVulnerable: false,
+              error: `API Error: ${error.response.data?.message || error.message}`,
+              isUnknown: true
+            };
         }
-      ],
-      fixedVersions: ['0.21.1'],
-      message: `${packageName}@${packageVersion} has a Server-Side Request Forgery vulnerability. Update to 0.21.1 or later.`,
-      sources: ['github']
+      }
+      // Network or connection errors
+      return {
+        isVulnerable: false,
+        error: `Network error: ${error.message}`,
+        isUnknown: true
+      };
+    }
+    
+    // Generic error handling
+    return {
+      isVulnerable: false,
+      error: `Failed to check vulnerabilities: ${error.message}`,
+      isUnknown: true
     };
   }
-  
-  return {
-    isVulnerable,
-    message: `${packageName}@${packageVersion} has no known vulnerabilities.`,
-    sources: ['github']
-  };
 }
 
 /**
