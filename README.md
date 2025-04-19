@@ -1,227 +1,370 @@
-# VulnZap MCP
+# VulnZap
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![npm](https://img.shields.io/npm/v/vulnzap-mcp)
+<div align="center">
+  <img src="https://github.com/vulnzap/vulnzap/raw/main/assets/logo.png" alt="VulnZap Logo" width="120" height="120">
+  <h3>The Missing Security Layer for AI-Generated Code</h3>
+  <p>Intercept vulnerabilities between AI-powered IDE suggestions and your codebase</p>
 
-VulnZap is a multi-ecosystem vulnerability scanning service with Model Context Protocol (MCP) integration for AI coding assistants. It detects vulnerabilities in dependencies across multiple package ecosystems, protecting your codebase from AI-introduced security issues.
+  [![npm version](https://img.shields.io/npm/v/vulnzap.svg?style=flat-square)](https://www.npmjs.org/package/vulnzap)
+  [![Downloads](https://img.shields.io/npm/dm/vulnzap.svg?style=flat-square)](https://npmjs.org/package/vulnzap)
+  [![License](https://img.shields.io/github/license/vulnzap/vulnzap.svg?style=flat-square)](https://github.com/vulnzap/vulnzap)
+</div>
 
-## Features
+## Why VulnZap?
 
-- **MCP Integration**: Connect directly to AI coding assistants like Cursor, Claude Code, and Windsurf
-- **Multi-Ecosystem Support**: Scans 12+ package ecosystems including npm, pip, gem, cargo, go, and more
-- **Multiple Data Sources**: Combines vulnerability data from GitHub Advisory Database and National Vulnerability Database
-- **Code Analysis**: Automatically detects dependencies in code snippets and checks for vulnerabilities
-- **Detailed Reports**: Provides comprehensive vulnerability information with remediation advice
+As AI coding assistants generate more of your codebase, they introduce dependencies without proper security vetting. VulnZap creates a security layer between your AI-powered IDE and your codebase, catching vulnerabilities before they become part of your project.
+
+- **MCP Security Bridge**: Intercept vulnerabilities between AI-powered IDE suggestions and your codebase
+- **AI Vulnerability Detection**: Catch vulnerabilities in AI-generated code in real-time
+- **Real-Time Protection**: Secure your codebase as you write, not after deployment
+- **Enterprise Integration**: Compatible with Cursor, Claude Code, Windsurf and other AI-powered editors
 
 ## Installation
 
 ```bash
-# Install globally
-npm install -g vulnzap-mcp
-
-# Or run with npx
-npx vulnzap-mcp
+npm install -g vulnzap
 ```
 
-## Usage
+## Quick Start
 
-### Basic Usage
+1. **Create an account or log in**
 
 ```bash
-# Start the server with default settings
-vulnzap
-
-# Show help
-vulnzap --help
-
-# Start with NVD integration
-vulnzap --nvd-key YOUR_NVD_API_KEY
-
-# Start with GitHub integration
-vulnzap --github-token YOUR_GITHUB_TOKEN
-
-# Start with both integrations for comprehensive scanning
-vulnzap --nvd-key YOUR_NVD_API_KEY --github-token YOUR_GITHUB_TOKEN
-
-# Use custom ports to avoid conflicts
-vulnzap --port 3001 --health-port 3002
+vulnzap login
 ```
 
-### Port Configuration
-
-VulnZap uses two ports:
-- **MCP Server Port**: Default is 3001 (used for the main MCP communication)
-- **Health Check Port**: Default is 3002 (used for the HTTP health check endpoint)
-
-If you encounter port conflicts (EADDRINUSE errors), you can:
-
-1. **Configure through command line arguments**:
-   ```bash
-   vulnzap --port 3001 --health-port 3002
-   ```
-
-2. **Set environment variables**:
-   ```bash
-   export PORT=3001
-   export HEALTH_PORT=3002
-   vulnzap
-   ```
-
-3. **Create a .env file** in your project directory:
-   ```
-   PORT=3001
-   HEALTH_PORT=3002
-   ```
-
-### Using with MCP Inspector
-
-When using the MCP Inspector with VulnZap, you need to specify the server port:
+2. **Connect to your IDE**
 
 ```bash
-# Start VulnZap first
-vulnzap --port 3001 --health-port 3002
-
-# In another terminal, run MCP Inspector with the correct server port
-npx @modelcontextprotocol/inspector vulnzap --server-port 3001
+vulnzap connect --ide cursor
 ```
 
-The inspector will typically use port 5173 for its web interface. If that port is in use:
+3. **Start the security bridge**
 
 ```bash
-# Find and kill the process using port 5173
-lsof -i :5173
-kill -9 <PID>
-
-# Or specify a different inspector port
-npx @modelcontextprotocol/inspector vulnzap --server-port 3001 --inspector-port 5174
+vulnzap secure
 ```
 
-### Connecting to LLM Clients
+4. **Code with confidence** - VulnZap will automatically scan for vulnerabilities in AI-generated code
 
-#### Cursor
+## Documentation
 
-1. Install VulnZap MCP globally:
-   ```bash
-   npm install -g vulnzap-mcp
-   ```
+### Authentication Commands
 
-2. Start the server:
-   ```bash
-   vulnzap
-   ```
+VulnZap supports multiple authentication methods for a seamless user experience:
 
-3. Configure Cursor settings:
-   - Open Cursor Settings
-   - Go to AI > Context > Context Providers
-   - Add a new Context Provider:
-     - Name: VulnZap
-     - Type: Model Context Protocol
-     - Command: vulnzap
-   - Save settings
+#### `vulnzap login`
 
-4. When using Cursor, it will now check for vulnerabilities in dependencies being added.
+Log in to your VulnZap account.
 
-#### Claude Code
-
-1. Start VulnZap MCP:
-   ```bash
-   vulnzap
-   ```
-
-2. In Claude Code settings:
-   - Navigate to Extensions
-   - Add External Tool
-   - Configure with:
-     - Name: VulnZap
-     - Type: MCP
-     - Command: vulnzap
-
-3. Claude will now have access to vulnerability scanning through MCP.
-
-#### Windsurf
-
-1. Run VulnZap:
-   ```bash
-   vulnzap
-   ```
-
-2. In Windsurf configuration:
-   - Add to MCP providers list:
-     ```json
-     {
-       "mcpProviders": [
-         {
-           "name": "VulnZap",
-           "command": "vulnzap"
-         }
-       ]
-     }
-     ```
-
-## API Usage
-
-VulnZap MCP provides several tools via the MCP protocol:
-
-### Resource Query
-
-Check if a specific package is vulnerable:
-
-```
-vuln://{ecosystem}/{packageName}/{packageVersion}
+```bash
+vulnzap login [options]
 ```
 
-Example: `vuln://npm/express/4.16.0`
+Options:
+- `--method <method>` - Authentication method: email, magic, google, github (default: "email")
+- `--email <email>` - Email address for login
 
-### Tool: batch-scan
-
-Scan multiple packages at once:
-
-```json
-{
-  "apiKey": "test123",
-  "packages": [
-    { "ecosystem": "npm", "packageName": "express", "packageVersion": "4.16.0" },
-    { "ecosystem": "npm", "packageName": "lodash", "packageVersion": "4.17.15" }
-  ]
-}
+Examples:
+```bash
+vulnzap login                           # Interactive login
+vulnzap login --method email --email user@example.com
+vulnzap login --method magic --email user@example.com
+vulnzap login --method google           # Opens browser for OAuth
+vulnzap login --method github           # Opens browser for OAuth
 ```
 
-### Tool: detailed-report
+#### `vulnzap logout`
 
-Generate a comprehensive vulnerability report:
+Log out from your VulnZap account.
 
-```json
-{
-  "apiKey": "test123",
-  "ecosystem": "npm",
-  "packageName": "lodash",
-  "packageVersion": "4.17.15"
-}
+```bash
+vulnzap logout
 ```
 
-### Tool: scan-code
+#### `vulnzap signup`
 
-Detect dependencies in code snippets and scan for vulnerabilities:
+Sign up for a new VulnZap account and subscribe to premium features.
 
-```json
-{
-  "apiKey": "test123",
-  "code": "import express from 'express';\nimport lodash from 'lodash';",
-  "language": "javascript"
-}
+```bash
+vulnzap signup
 ```
 
-## API Keys
+#### `vulnzap account`
 
-For enhanced scanning capabilities, you can use these API keys:
+View and manage your VulnZap account settings and subscription.
 
-- **NVD API Key**: Get from [NVD](https://nvd.nist.gov/developers/request-an-api-key)
-- **GitHub Token**: Generate at [GitHub Settings](https://github.com/settings/tokens)
+```bash
+vulnzap account
+```
 
-## GitHub Repository
+#### `vulnzap upgrade`
 
-[https://github.com/yecelebisanli/vulnzap-mcp](https://github.com/plawlost/vulnzap-mcp)
+Upgrade your account to a premium tier.
+
+```bash
+vulnzap upgrade
+```
+
+### Security Commands
+
+#### `vulnzap secure`
+
+Start the MCP security bridge to protect your AI coding.
+
+```bash
+vulnzap secure [options]
+```
+
+Options:
+- `--mcp` - Use Model Context Protocol for IDE integration
+- `--ide <ide-name>` - Specify IDE integration (cursor, claude-code, windsurf)
+- `--port <port>` - Port to use for MCP server (default: 3456)
+- `--api-key <key>` - Premium API key for enhanced features
+
+#### `vulnzap check`
+
+Check a package for vulnerabilities.
+
+```bash
+vulnzap check <package> [options]
+```
+
+Options:
+- `-e, --ecosystem <ecosystem>` - Package ecosystem (npm, pip) (default: "npm")
+- `-v, --version <version>` - Package version
+
+Examples:
+```bash
+vulnzap check express@4.17.1
+vulnzap check lodash --version 4.17.15 --ecosystem npm
+```
+
+#### `vulnzap connect`
+
+Connect VulnZap to your AI-powered IDE.
+
+```bash
+vulnzap connect [options]
+```
+
+Options:
+- `--ide <ide-name>` - IDE to connect with (cursor, claude-code, windsurf)
+
+#### `vulnzap batch`
+
+Batch scan multiple packages for vulnerabilities (Premium feature).
+
+```bash
+vulnzap batch [options]
+```
+
+Options:
+- `-f, --file <file>` - Path to JSON file with packages to scan
+- `-o, --output <file>` - Output file for results
+- `--api-key <key>` - Premium API key (required for batch scanning)
+
+## Account Management
+
+VulnZap offers a comprehensive account management system with Stripe integration for subscriptions:
+
+### Authentication Options
+
+- **Email/Password**: Traditional authentication
+- **Magic Link**: Passwordless email authentication
+- **Google OAuth**: Log in with your Google account
+- **GitHub OAuth**: Log in with your GitHub account
+
+### Subscription Tiers
+
+VulnZap is open-core, with a free tier that provides essential protection. For teams and organizations that need enhanced security, we offer premium plans:
+
+#### Free Tier
+- Basic vulnerability scanning
+- MCP server integration
+- GitHub Advisory Database
+- Community support
+- 50 scans per day limit
+
+#### Pro Tier ($9/mo)
+- Everything in Free tier
+- Zero-day vulnerability alerts
+- AI-generated code analysis
+- Unlimited vulnerability scanning
+- Priority fixes and updates
+- Enterprise audit logs
+- 1,000 scans per day
+
+#### Enterprise Tier ($19/user/mo)
+- Everything in Pro tier
+- 24/7 dedicated support
+- Custom security policies
+- SOC2 compliance reporting
+- Automated remediation
+- Private vulnerability database
+- 10,000 scans per day
+
+### Subscription Management
+
+Manage your subscription with the following commands:
+
+```bash
+vulnzap account    # View account details and subscription status
+vulnzap upgrade    # Upgrade to a premium tier
+```
+
+## MCP Integration
+
+VulnZap seamlessly integrates with AI assistants through the Model Context Protocol (MCP). This creates a security layer that:
+
+1. Intercepts code snippets suggested by your AI assistant
+2. Scans them for known vulnerabilities and security issues
+3. Warns about potential issues directly in your IDE
+4. Suggests secure alternatives when vulnerabilities are detected
+
+To use VulnZap's MCP integration, simply run:
+
+```bash
+vulnzap secure --mcp --ide cursor
+```
+
+## Environment Variables
+
+Create a `.env` file in your project root with these variables (see `.env.example`):
+
+- `SUPABASE_URL` - Your Supabase project URL
+- `SUPABASE_ANON_KEY` - Supabase anonymous key
+- `SUPABASE_SERVICE_KEY` - Supabase service role key
+- `STRIPE_PUBLIC_KEY` - Stripe publishable key
+- `STRIPE_SECRET_KEY` - Stripe secret key
+- `STRIPE_WEBHOOK_SECRET` - Stripe webhook signing secret
+- `NVD_API_KEY` - National Vulnerability Database API key
+- `VULNZAP_API_KEY` - Your VulnZap premium API key
+
+## Self-Hosting
+
+VulnZap can be self-hosted for enterprise deployments:
+
+1. Clone the repository
+```bash
+git clone https://github.com/vulnzap/vulnzap.git
+cd vulnzap
+```
+
+2. Install dependencies
+```bash
+npm install
+```
+
+3. Set up environment variables (copy from `.env.example`)
+```bash
+cp .env.example .env
+# Edit .env with your configuration values
+```
+
+4. Initialize the database
+```bash
+npm run db:seed
+```
+
+5. Build and start the server
+```bash
+npm run build
+npm start
+```
+
+## How It Works
+
+VulnZap runs as an MCP server that bridges your AI coding assistant with enterprise-grade security scanning:
+
+1. **Connect**: VulnZap connects to your AI-powered IDE through the Model Context Protocol
+2. **Intercept**: When your AI assistant suggests code, VulnZap intercepts it
+3. **Scan**: The code is scanned for known vulnerabilities and security issues
+4. **Protect**: If vulnerabilities are found, VulnZap alerts you and suggests secure alternatives
+
+## Contributing
+
+We welcome contributions to VulnZap! Here's how you can help:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+Please read our [Contributing Guide](CONTRIBUTING.md) for more details.
 
 ## License
 
-MIT 
+VulnZap is MIT licensed. See [LICENSE](LICENSE) for details.
+
+## Security
+
+If you discover a security vulnerability within VulnZap, please send an email to security@vulnzap.dev.
+
+## Support
+
+- Documentation: [https://docs.vulnzap.dev](https://docs.vulnzap.dev)
+- Discord: [Join our community](https://discord.gg/vulnzap)
+- GitHub Issues: [Report bugs](https://github.com/vulnzap/vulnzap/issues)
+- Email: support@vulnzap.dev
+
+# VulnZap MCP Integration with cursor
+
+VulnZap is a security tool that automatically checks for vulnerabilities in packages before installation in your Cursor IDE.
+
+## Prerequisites
+
+- Node.js installed
+- Cursor IDE
+- VulnZap API key
+
+## Setup Instructions
+
+1. Build the project:
+```bash
+npm run build
+```
+
+2. Link the package globally:
+```bash
+npm link
+```
+
+3. Configure Cursor IDE:
+   - Open Cursor Settings
+   - Navigate to the `mcp.json` file
+   - Add the following configuration:
+```json
+{
+  "mcpServers": {
+    "VulnZap": {
+      "command": "vulnzap",
+      "args": ["connect", "--ide", "cursor", "--port", "3456"],
+      "env": {
+        "VULNZAP_API_KEY": "your_api_key_here"
+      }
+    }
+  }
+}
+```
+
+4. Start VulnZap Server:
+   - Ensure you have set up your environment file with the required credentials
+   - Start the VulnZap server
+
+## Usage
+
+Once configured, VulnZap will automatically:
+- Check for vulnerabilities before package installations
+- Provide security recommendations
+- Prevent installation of vulnerable packages
+
+## Environment Variables
+
+Make sure to set the following environment variables:
+- `VULNZAP_API_KEY`: Your VulnZap API key
+
+## Support
+
+For any issues or questions, please open an issue in the repository. 

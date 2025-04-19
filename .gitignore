@@ -2,6 +2,28 @@
 node_modules/
 jspm_packages/
 
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
+
+# dotenv environment variables file
+.env
+.env.test
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.development
+.env.production
+
 # Logs
 logs
 *.log
@@ -10,62 +32,37 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
-# Environment variables
-.env
-.env.test
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-
-# Build directories
+# Build output
 dist/
 build/
 out/
-.next/
 
-# Coverage directory
+# Coverage directory used by tools like istanbul
 coverage/
-
-# OS specific files
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
 # Editor directories and files
 .idea/
 .vscode/
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# npm package files
-*.tgz
-
-# Virtual environments
-.venv/
-venv/
+*.swp
+*.swo
+.DS_Store
 
 # Cache directories
-.npm/
-.eslintcache
-.cache
+.cache/
+.parcel-cache/
+cache/
 
-# Yarn
-.yarn-integrity
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
+# Local History for Visual Studio Code
+.history/
 
-# Project specific
-vulnzap-landing/ 
+# NVD API cache
+cache/
+
+# Supabase keys
+.supabase/
+
+# Stripe keys
+.stripe/
+
+# User data directory (for development)
+.vulnzap/ 
