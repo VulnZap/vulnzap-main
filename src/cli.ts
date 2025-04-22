@@ -3,7 +3,7 @@
 import { program } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { startMcpServer, checkVulnerability, getBatchStatus } from './index.js';
+import { startMcpServer, checkVulnerability, checkBatch } from './index.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -404,6 +404,105 @@ program
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
+    }
+  });
+
+program
+  .command('sbom')
+  .description('Scan the current directory for SBOM (Software Bill of Materials)')
+  .option('--ecosystem <ecosystem>', 'Specific ecosystem to scan (npm, pip, go, rust)')
+  .option('--output <file>', 'Output file for SBOM results (JSON format)')
+  .action(async (options) => {
+    displayBanner();
+    try {
+      const { authenticated } = await auth.checkAuth();
+      if (!authenticated) {
+        console.error(chalk.red('Error: You must be logged in to scan for SBOM'));
+        console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
+        process.exit(1);
+      }
+
+      const checkAlreadyInitialized = await checkInit();
+      if (!checkAlreadyInitialized) {
+        console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
+        process.exit(1);
+      }
+
+      const spinner = ora('Scanning for SBOM...').start();
+
+      // Extract packages from current directory
+      const packages = extractPackagesFromDirectory(process.cwd(), options.ecosystem);
+
+      if (packages.length === 0) {
+        spinner.fail('No packages found to scan');
+        console.log(chalk.yellow('No package manager files (package.json, requirements.txt, etc.) found in the directory'));
+        return;
+      }
+
+      spinner.succeed('SBOM scan completed');
+
+      // Format and display results
+      console.log('\nSBOM Results:');
+      console.log('-------------');
+      
+      packages.forEach((pkg) => {
+        console.log(`Package: ${pkg.packageName}`);
+        console.log(`Version: ${pkg.version}`);
+        console.log(`Ecosystem: ${pkg.ecosystem}`);
+        console.log('');
+      });
+      // Performing vulnerability scans on these packages
+      const { message, results } = await checkBatch(packages);
+      console.log('\nVulnerability Scan Results:');
+      console.log('---------------------------');
+      if (message) {
+        console.log(chalk.yellow('!') + ` ${message}`);
+      }
+
+      results?.forEach((result) => {
+        console.log(`Package: ${result.package.packageName}`);
+        console.log(`Version: ${result.package.version}`);
+        console.log(`Ecosystem: ${result.package.ecosystem}`);
+        if (result.status === "vulnerable") {
+          console.log(chalk.red('✗ Vulnerable: Yes'));
+          const combinedAdvisories = [
+            ...(result.vulnerabilities?.database || []),
+            ...(result.vulnerabilities?.github || []),
+            ...(result.vulnerabilities?.nvd || []),
+            ...(result.vulnerabilities?.osv || []),
+          ];
+          combinedAdvisories.forEach((advisory) => {
+            console.log(chalk.yellow(`- ${advisory.title}`));
+            console.log(`  Severity: ${advisory.severity}`);
+            console.log(`  Description: ${advisory.description}`);
+            if (advisory.references?.length) {
+              console.log(`  References: ${advisory.references.join(', ')}`);
+            }
+            console.log('');
+
+          });
+        }
+        else {
+          console.log(chalk.green('Vulnerable: No'));
+        }
+        console.log('');
+      });
+      // Save results to file if specified
+      if (options.output) {
+        const outputPath = path.resolve(options.output);
+        fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
+        console.log(`\nResults saved to: ${outputPath}`);
+      }
+      else {
+        // Save to default location in .vulnzap-core
+        const defaultOutputPath = path.join(process.cwd(), '.vulnzap-core', 'sbom-results.json');
+        fs.writeFileSync(defaultOutputPath, JSON.stringify(results, null, 2));
+        console.log(`\nResults saved to: ${defaultOutputPath}`);
+      }
+      console.log(chalk.green('✓') + ' SBOM scan completed successfully');
+    } catch (error) {
+      console.log(error)
+      process.exit(1)
     }
   });
 

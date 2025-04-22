@@ -1,87 +1,91 @@
-// Type definitions
-export interface Ecosystem {
-    name: string;
-    displayName: string;
-    packageManager: string;
-    website: string | null;
-    supportedVersionFormats: string[];
-    description: string;
-}
-
-export interface Vulnerability {
-    id: string;
+// The 3 types are made different but are in same format due to the assumption that in future we may require them to behave differently and add source specific fields. 
+export interface GitHubVulnerability {
     severity: string;
-    title: string;
+    cveId: string;
+    ghsaId: string;
+    vulnerableVersionRange: string;
+    firstPatchedVersion: string;
+    summary: string;
+    cveStatus?: string;
+    ghsaStatus?: string;
     description: string;
-    fixedVersions: string[];
+    publishedAt: string;
+    updatedAt: string;
     references: string[];
 }
 
-export interface ScanResponse {
-    packageName: string;
-    version: string;
-    ecosystem: string;
-    timestamp: string;
-    vulnerabilities: Vulnerability[];
-    processedVulnerabilities: any;
-    remediation?: {
-        packageName: string;
-        currentVersion: string;
-        ecosystem: string;
-        recommendedVersion: string;
-        updateInstructions: string;
-        alternativePackages: string[];
-        notes: string;
-    };
+export interface NvdVulnerability {
+    severity: string;
+    cveId: string;
+    ghsaId: string;
+    cveStatus?: string;
+    ghsaStatus?: string;
+    vulnerableVersionRange: string;
+    firstPatchedVersion: string;
+    summary: string;
+    description: string;
+    publishedAt: string;
+    updatedAt: string;
+    references: string[];
 }
+
+export interface OsvVulnerability {
+    severity: string;
+    cveId: string;
+    ghsaId: string;
+    cveStatus?: string;
+    ghsaStatus?: string;
+    vulnerableVersionRange: string;
+    firstPatchedVersion: string;
+    summary: string;
+    description: string;
+    publishedAt: string;
+    updatedAt: string;
+    references: string[];
+}
+
+export interface VulnerabilitiesSource {
+    github?: any[];
+    nvd?: any[];
+    osv?: any[];
+    database?: any[];
+}
+
+export interface ScannerError {
+    code: string;
+    message: string;
+    source?: string;
+}
+
+export interface VulnerabilityResult {
+    message: string;
+    found: boolean;
+    dataSources?: VulnerabilitiesSource;
+    error?: ScannerError;
+} 
 
 export interface BatchScanResponse {
-    timestamp: string;
-    results: Array<{
-        package: string;
-        version: string;
-        ecosystem: string;
-        vulnerabilities: Vulnerability[];
-    }>;
+    package: PackageInfo,
+    result: VulnerabilityResult,
+    processedResult: any
 }
 
-export interface SBOMResponse {
-    projectId: string;
-    format: string;
-    timestamp: string;
-    sbom: any;
-}
-
-export interface UsageStatsResponse {
-    period: string;
-    stats: Array<{
-        date: string;
-        scans_count: number;
-        batch_scans_count: number;
-        ai_scans_count: number;
-        sbom_scans_count: number;
-    }>;
-    limits: {
-        scans: number;
-        batchScans: number;
-        aiScans: number;
-        sbomScans: number;
-    };
-    features: {
-        aiAssistedScans: boolean;
-        sbomScanning: boolean;
-        privateRepos: boolean;
-        githubPrBot: boolean;
-        githubPrAutopatch: boolean;
-    };
-}
-
-export interface RemediationAdvice {
+export interface PackageInfo {
     packageName: string;
-    currentVersion: string;
     ecosystem: string;
-    recommendedVersion: string;
-    updateInstructions: string;
-    alternativePackages: string[];
-    notes: string;
+    version: string;
 }
+  
+export interface ScanResponse {
+    package: PackageInfo;
+    timestamp: string;
+    status: 'safe' | 'vulnerable' | 'error';
+    vulnerabilities?: VulnerabilitiesSource;
+    remediation?: {
+      recommendedVersion: string;
+      updateInstructions: string;
+      alternativePackages: string[];
+      notes: string;
+    };
+    processedVulnerabilities?: any;
+  }
