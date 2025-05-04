@@ -89,3 +89,8 @@ export interface ScanResponse {
     };
     processedVulnerabilities?: any;
   }
+
+  export interface ApiOptions {
+    useCache: boolean;
+    useAi: boolean;
+  }

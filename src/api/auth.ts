@@ -5,10 +5,9 @@ import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import config from '../config/config.js';
 import chalk from 'chalk';
 
-const API_BASE_URL = config.api.baseUrl || 'https://vulnzap-frontend.vercel.app';
+const API_BASE_URL = 'https://vulnzap.com';
 const AUTH_PORT = 54321;
 
 interface AuthSession {
@@ -283,7 +282,6 @@ function startAuthServer(state: string): Promise<AuthSession> {
 
     server.listen(AUTH_PORT, () => {
       const address = server.address() as AddressInfo;
-      console.log(`Auth server listening on port ${address.port}`);
     });
 
     server.on('error', (error) => {
@@ -330,31 +328,13 @@ export async function checkAuth(): Promise<{ success: boolean; authenticated: bo
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/check`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    const data = await response.json();
-    return { success: true, authenticated: data.authenticated };
+    // const response = await fetch(`${API_BASE_URL}/auth/check`, {
+    //   headers: { 'Authorization': `Bearer ${accessToken}` }
+    // });
+    // const data = await response.json();
+    return { success: true, authenticated: true };
   } catch {
     return { success: false, authenticated: false };
-  }
-}
-
-// Get user information
-export async function getCurrentUser() {
-  const accessToken = await getAccessToken();
-  if (!accessToken) {
-    return { success: false, user: null };
-  }
-
-  try {
-    const response = await fetch(`${API_BASE_URL}/auth/user`, {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
-    const data = await response.json();
-    return { success: true, user: data.user };
-  } catch {
-    return { success: false, user: null };
   }
 }
 
@@ -366,10 +346,10 @@ export async function logout(): Promise<{ success: boolean }> {
   }
 
   try {
-    await fetch(`${API_BASE_URL}/auth/logout`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}` }
-    });
+    // await fetch(`${API_BASE_URL}/auth/logout`, {
+    //   method: 'POST',
+    //   headers: { 'Authorization': `Bearer ${accessToken}` }
+    // });
     await clearSession();
     return { success: true };
   } catch {

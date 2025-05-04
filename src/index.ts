@@ -5,23 +5,26 @@
  * which protects AI-generated code from vulnerabilities.
  */
 
+// Third-party imports
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import semver from 'semver';
-import dotenv from 'dotenv';
 import { z } from 'zod';
 import axios from 'axios';
+import dotenv from 'dotenv';
+
+// Node.js built-in modules
+import { fileURLToPath } from 'url';
+import path from 'path';
+
+// Local imports
 import { checkAuth, getKey } from './api/auth.js';
 import config from './config/config.js';
-import chalk from 'chalk';
 import { extractPackagesFromDirectory } from './utils/packageExtractor.js';
 import { batchScan } from './api/batchScan.js';
-import { BatchScanResponse, ScanResponse } from './types/response.js';
+import { ApiOptions, BatchScanResponse, ScanResponse } from './types/response.js';
+import { cacheService } from './services/cache.js';
 
-// Loading environment variables
+// Load environment variables
 dotenv.config();
 
 // Get __dirname equivalent in ESM
@@ -36,6 +39,7 @@ export interface VulnZapConfig {
 	ide?: string;
 	port?: number;
 	apiKey?: string;
+	serverIsDown?: boolean;
 }
 
 export interface ApiResponse {
@@ -56,7 +60,8 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
 		useMcp: config.useMcp ?? true,
 		ide: config.ide ?? 'cursor',
 		port: config.port ?? 3456,
-		apiKey: config.apiKey ?? process.env.VULNZAP_API_KEY
+		apiKey: config.apiKey ?? process.env.VULNZAP_API_KEY,
+		serverIsDown: config.serverIsDown ?? false
 	};
 
 	// Loading NVD API key if available
@@ -133,7 +138,10 @@ function setupVulnerabilityResource(server: McpServer): void {
 				const version = Array.isArray(packageVersion) ? packageVersion[0] : packageVersion;
 				const ecosystemList = Array.isArray(ecosystem) ? ecosystem[0] : ecosystem;
 				const packageNameList = Array.isArray(packageName) ? packageName[0] : packageName;
-				const result = await checkVulnerability(ecosystemList, packageNameList, version);
+				const result = await checkVulnerability(ecosystemList, packageNameList, version, {
+					useCache: true,
+					useAi: false
+				});
 
 				// Construct response
 				if (result.status !== 200) {
@@ -189,7 +197,10 @@ function setupVulnerabilityResource(server: McpServer): void {
 					}
 				}
 
-				const result = await checkVulnerability(ecosystem, packageName, version || 'latest');
+				const result = await checkVulnerability(ecosystem, packageName, version || 'latest', {
+					useCache: true,
+					useAi: false
+				});
 				if (result.status === 200 && result.foundVulnerabilites) {
 					return {
 						content: [{
@@ -250,7 +261,10 @@ function setupVulnerabilityResource(server: McpServer): void {
 				}
 
 				// Perform batch scan
-				const results = await batchScan(packages);
+				const results = await batchScan(packages, {
+					useCache: true,
+					useAi: false
+				});
 
 				// Format results
 				const vulnerableCount = results.results.filter(r => r.status === 'vulnerable').length;
@@ -338,9 +352,19 @@ function setupPremiumTools(server: McpServer, apiKey: string): void {
 export async function checkVulnerability(
 	ecosystem: string,
 	packageName: string,
-	packageVersion: string
+	packageVersion: string,
+	options: ApiOptions
 ): Promise<any> {
 	try {
+		// Check cache first
+		const cachedResult = cacheService.readCache(packageName, packageVersion, ecosystem);
+		if (cachedResult) {
+			return {
+				...cachedResult,
+				fromCache: true
+			};
+		}
+
 		// Validate API key presence
 		const apiKey = await getKey();
 		if (!apiKey) {
@@ -376,48 +400,55 @@ export async function checkVulnerability(
 		// Extract vulnerability data from response
 		const data: ScanResponse = response.data;
 
+		// Prepare result
+		let result;
+
 		// If no vulnerabilities found
 		if (data.status === "safe") {
-			return {
+			result = {
 				isVulnerable: false,
 				message: `No known vulnerabilities found for ${packageName}@${packageVersion}`,
 				sources: data.processedVulnerabilities?.sources || []
 			};
+		} else {
+			// Convert vulnerabilities to advisories format
+			const advisories = [
+				...(data.vulnerabilities?.github || []),
+				...(data.vulnerabilities?.nvd || []),
+				...(data.vulnerabilities?.osv || []),
+				...(data.vulnerabilities?.database || [])
+			];
+			const advisoriesList = advisories.map((vuln: any) => {
+				return {
+					title: vuln.title || vuln.summary,
+					description: vuln.description || vuln.summary,
+					severity: vuln.severity || 'unknown',
+					references: vuln.references || [],
+					cveId: vuln.cveId,
+					ghsaId: vuln.ghsaId,
+					cveStatus: vuln.cveStatus,
+					ghsaStatus: vuln.ghsaStatus,
+					firstPatchedVersion: vuln.firstPatchedVersion,
+					publishedAt: vuln.publishedAt,
+					updatedAt: vuln.updatedAt
+				};
+			});
+
+			result = {
+				isVulnerable: true,
+				advisories,
+				fixedVersions: data.remediation?.recommendedVersion ? [data.remediation.recommendedVersion] : undefined,
+				message: data.remediation ?
+					`Update to ${data.remediation.recommendedVersion} to fix vulnerabilities. ${data.remediation.notes}` :
+					`Found ${advisories.length} vulnerabilities in ${packageName}@${packageVersion}`,
+				sources: data.processedVulnerabilities?.sources || []
+			};
 		}
 
-		// Convert vulnerabilities to advisories format
-		const advisories = [
-			...(data.vulnerabilities?.github || []),
-			...(data.vulnerabilities?.nvd || []),
-			...(data.vulnerabilities?.osv || []),
-			...(data.vulnerabilities?.database || [])
-		];
-		const advisoriesList = advisories.map((vuln: any) => {
-			return {
-				title: vuln.title || vuln.summary,
-				description: vuln.description || vuln.summary,
-				severity: vuln.severity || 'unknown',
-				references: vuln.references || [],
-				cveId: vuln.cveId,
-				ghsaId: vuln.ghsaId,
-				cveStatus: vuln.cveStatus,
-				ghsaStatus: vuln.ghsaStatus,
-				firstPatchedVersion: vuln.firstPatchedVersion,
-				publishedAt: vuln.publishedAt,
-				updatedAt: vuln.updatedAt
-			};
-		});
+		// Cache the result
+		cacheService.writeCache(packageName, packageVersion, ecosystem, result);
 
-		// Return vulnerability result with remediation if available
-		return {
-			isVulnerable: true,
-			advisories,
-			fixedVersions: data.remediation?.recommendedVersion ? [data.remediation.recommendedVersion] : undefined,
-			message: data.remediation ?
-				`Update to ${data.remediation.recommendedVersion} to fix vulnerabilities. ${data.remediation.notes}` :
-				`Found ${advisories.length} vulnerabilities in ${packageName}@${packageVersion}`,
-			sources: data.processedVulnerabilities?.sources || []
-		};
+		return result;
 
 	} catch (error: any) {
 		// Handle specific error cases
@@ -475,6 +506,29 @@ export async function checkBatch(
 	}[]
 ) {
 	try {
+		// Check cache for each package first
+		const results = await Promise.all(packages.map(async (pkg) => {
+			const cachedResult = cacheService.readCache(pkg.packageName, pkg.version, pkg.ecosystem);
+			if (cachedResult) {
+				return {
+					package: pkg,
+					...cachedResult,
+					fromCache: true
+				};
+			}
+			return null;
+		}));
+
+		// Filter out packages that need to be checked
+		const uncachedPackages = packages.filter((pkg, index) => !results[index]);
+
+		if (uncachedPackages.length === 0) {
+			return {
+				results: results.filter(r => r !== null),
+				message: `All results retrieved from cache.`
+			};
+		}
+
 		// Validate API key presence
 		const apiKey = await getKey();
 		if (!apiKey) {
@@ -497,7 +551,7 @@ export async function checkBatch(
 		}
 
 		const response = await axios.post(`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.batch}`, {
-			packages: packages
+			packages: uncachedPackages
 		}, {
 			headers: {
 				"x-api-key": apiKey
@@ -506,17 +560,31 @@ export async function checkBatch(
 
 		const data: BatchScanResponse[] = response.data;
 
-		const results = data.map((result) => {
-			return {
+		const apiResults = data.map((result) => {
+			const scanResult = {
 				package: result.package,
 				status: result.result.found ? 'vulnerable' : 'safe',
 				message: result.result.message,
 				vulnerabilities: result.result.dataSources,
 				processedResult: result.processedResult
 			};
+
+			// Cache the result
+			cacheService.writeCache(
+				result.package.packageName,
+				result.package.version,
+				result.package.ecosystem,
+				scanResult
+			);
+
+			return scanResult;
 		});
+
+		// Combine cached and new results
+		const finalResults = results.map((r, i) => r || apiResults[i]);
+
 		return {
-			results: results,
+			results: finalResults,
 			message: `Batch scan completed for ${packages.length} packages.`
 		};
 	} catch (error: any) {
