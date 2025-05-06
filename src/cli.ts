@@ -288,6 +288,8 @@ program
   .description('Check a package for vulnerabilities (format: npm:package-name@version)')
   .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip)', 'npm')
   .option('-v, --version <version>', 'Package version')
+  .option('-C, --cache', 'Use cached results')
+  .option('-A, --ai', 'Use AI to check for vulnerabilities')
   .action(async (packageInput, options) => {
     displayBanner();
     let packageName, packageVersion, packageEcosystem;
@@ -319,12 +321,12 @@ program
       console.log('Or: vulnzap check package-name --ecosystem npm --version 4.17.1');
       process.exit(1);
     }
-    const spinner = ora(`Checking ${packageEcosystem}:${packageName}@${packageVersion} for vulnerabilities...`).start();
+    const spinner = ora(`Checking ${packageEcosystem}:${packageName}@${packageVersion} for vulnerabilities...\n`).start();
     try {
       await checkHealth();
       const result = await checkVulnerability(packageEcosystem, packageName, packageVersion, {
-        useCache: true,
-        useAi: true
+        useCache: options.cache,
+        useAi: options.ai
       });
       spinner.stop();
 
@@ -353,10 +355,23 @@ program
       }
       if (result.isVulnerable) {
         console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities`));
+        if (result.processedVulnerabilities) {
+          console.log(chalk.green(`✓ LLM Processed: `));
+          console.log('');
+          console.log(`1. Summary: `);
+          console.log(`- ${result.processedVulnerabilities.summary}`);
+          console.log(`2. Impact: `);
+          console.log(`- ${result.processedVulnerabilities.impact}`);
+          console.log(`3. Recommendations: `);
+          result.processedVulnerabilities.recommendations.forEach((recommendation: string) => {
+            console.log(`- ${recommendation}`);
+          });
+        }
         if (result.sources && result.sources.length > 0) {
           console.log(`  Sources: ${result.sources.join(', ')}`);
         }
         console.log('');
+        console.log(chalk.green(`✓ Raw Vulnerabilities: `));
         // Display vulnerability details
         result.advisories?.forEach((advisory: { title: string; severity: string; description: string; references?: string[] }) => {
           console.log(chalk.yellow(`- ${advisory.title}`));
@@ -776,23 +791,9 @@ program
     displayBanner();
 
     try {
-      const homeDir = os.homedir();
-      const configPath = join(homeDir, '.vulnzap', 'config.json');
-      if (fs.existsSync(configPath)) {
-        const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const { success, user } = config;
-
-        if (success && user) {
-          console.log(chalk.green('✓') + ' Account information:');
-          console.log(`  Email: ${user.email}`);
-          console.log(`  Name: ${user.name || 'Not set'}`);
-        } else {
-          console.log(chalk.yellow('You are not logged in.'));
-          console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate.`);
-        }
-      } else {
-        console.log(chalk.yellow('No account information found.'));
-      }
+      console.log('\nAccount Details:');
+      console.log('----------------');
+      console.log('Please visit https://vulnzap.com/dashboard to view your account details');
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);

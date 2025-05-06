@@ -357,12 +357,14 @@ export async function checkVulnerability(
 ): Promise<any> {
 	try {
 		// Check cache first
-		const cachedResult = cacheService.readCache(packageName, packageVersion, ecosystem);
-		if (cachedResult) {
-			return {
-				...cachedResult,
-				fromCache: true
-			};
+		if (options.useCache) {
+			const cachedResult = cacheService.readCache(packageName, packageVersion, ecosystem);
+			if (cachedResult) {
+				return {
+					...cachedResult,
+					fromCache: true
+				};
+			}
 		}
 
 		// Validate API key presence
@@ -390,7 +392,9 @@ export async function checkVulnerability(
 		const response = await axios.post(`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.check}`, {
 			ecosystem,
 			packageName,
-			version: packageVersion
+			version: packageVersion,
+			noCache: !options.useCache,
+			useAi: options.useAi
 		}, {
 			headers: {
 				"x-api-key": apiKey
@@ -398,7 +402,7 @@ export async function checkVulnerability(
 		});
 
 		// Extract vulnerability data from response
-		const data: ScanResponse = response.data;
+		const data: ScanResponse = response.data.data;
 
 		// Prepare result
 		let result;
@@ -434,14 +438,29 @@ export async function checkVulnerability(
 				};
 			});
 
+			const sources = []
+			if (data.vulnerabilities?.database?.length && data.vulnerabilities.database.length > 0) {
+				sources.push(...data.vulnerabilities.database)
+			}
+			if (data.vulnerabilities?.github?.length && data.vulnerabilities.github.length > 0) {
+				sources.push(...data.vulnerabilities.github)
+			}
+			if (data.vulnerabilities?.nvd?.length && data.vulnerabilities.nvd.length > 0) {
+				sources.push(...data.vulnerabilities.nvd)
+			}
+			if (data.vulnerabilities?.osv?.length && data.vulnerabilities.osv.length > 0) {
+				sources.push(...data.vulnerabilities.osv)
+			}
+
 			result = {
 				isVulnerable: true,
-				advisories,
+				advisories: advisoriesList,
 				fixedVersions: data.remediation?.recommendedVersion ? [data.remediation.recommendedVersion] : undefined,
+				processedVulnerabilities: data.processedVulnerabilities,
 				message: data.remediation ?
-					`Update to ${data.remediation.recommendedVersion} to fix vulnerabilities. ${data.remediation.notes}` :
-					`Found ${advisories.length} vulnerabilities in ${packageName}@${packageVersion}`,
-				sources: data.processedVulnerabilities?.sources || []
+					`Update to ${data.remediation.recommendedVersion} to fix vulnerabilities. ${data.remediation.notes ? data.remediation.notes : ''} ${advisories.length} vulnerabilities in ${packageName}@${packageVersion}` :
+					`${advisories.length} vulnerabilities in ${packageName}@${packageVersion}`,
+				sources: sources
 			};
 		}
 

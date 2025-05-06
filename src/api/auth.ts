@@ -111,7 +111,7 @@ export async function clearSession() {
   try {
     const sessionPath = getSessionFilePath();
     if (fs.existsSync(sessionPath)) {
-      fs.unlinkSync(sessionPath);
+      fs.rmSync(sessionPath, { force: true, recursive: true });
     }
   } catch (error) {
     console.error('Error clearing session:', error);
