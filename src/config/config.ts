@@ -50,8 +50,7 @@ export const config = {
 
   // API endpoints
   api: {
-    // baseUrl: 'https://vulnzap-server.vercel.app',
-    baseUrl: 'http://localhost:4000',
+    baseUrl: process.env.NODE_ENV === 'development' ? 'http://localhost:4000' : 'https://vulnzap-server.vercel.app',
     addOn: '/api/v1/vulnzap',
     vulnerability: {
       check: '/scan',

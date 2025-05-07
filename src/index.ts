@@ -48,6 +48,18 @@ export interface ApiResponse {
 	data: any
 }
 
+// Local vulnerability check function
+async function checkLocalVulnerability(ecosystem: string, packageName: string, version: string): Promise<any> {
+	// First try to get from cache
+	const cachedResult = cacheService.readCache(packageName, version, ecosystem);
+	if (cachedResult) {
+		return cachedResult;
+	}
+	
+	// If not in cache, return null to indicate no local data available
+	return null;
+}
+
 /**
  * Start the VulnZap MCP server
  * 
@@ -188,40 +200,84 @@ function setupVulnerabilityResource(server: McpServer): void {
 			try {
 				const { command, packageName, version, ecosystem } = parameters;
 
-				if (!packageName || !version || !ecosystem) {
+				if (!packageName || !ecosystem) {
 					return {
 						content: [{
 							type: "text",
-							text: "Please provide the following parameters: packageName, ecosystem, version"
+							text: "Please provide the required parameters: packageName and ecosystem"
 						}]
 					}
 				}
 
-				const result = await checkVulnerability(ecosystem, packageName, version || 'latest', {
-					useCache: true,
-					useAi: false
-				});
-				if (result.status === 200 && result.foundVulnerabilites) {
-					return {
-						content: [{
-							type: "text",
-							text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n` + JSON.stringify(result.data)
-						}]
-					};
-				} else if (result.status === 200 && result.foundVulnerabilites) {
-					return {
-						content: [{
-							type: "text",
-							text: `✅ ${packageName}@${version} appears to be safe to install.`
-						}]
-					};
-				} else {
-					return {
-						content: [{
-							type: "text",
-							text: `${result.message}`
-						}]
-					};
+				// First try to get from cache
+				const cachedResult = cacheService.readCache(packageName, version || 'latest', ecosystem);
+				if (cachedResult) {
+					console.log("Found result in cache");
+					if (cachedResult.isVulnerable) {
+						return {
+							content: [{
+								type: "text",
+								text: `⚠️ [CACHED] Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(cachedResult.advisories, null, 2)}\n\nRecommendation: ${cachedResult.message}`
+							}]
+						};
+					} else {
+						return {
+							content: [{
+								type: "text",
+								text: `✅ [CACHED] ${packageName}@${version || 'latest'} appears to be safe to install.`
+							}]
+						};
+					}
+				}
+
+				// If not in cache, try the API
+				try {
+					const result = await checkVulnerability(ecosystem, packageName, version || 'latest', {
+						useCache: true,
+						useAi: false
+					});
+
+					if (result.isVulnerable) {
+						return {
+							content: [{
+								type: "text",
+								text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(result.advisories, null, 2)}\n\nRecommendation: ${result.message}`
+							}]
+						};
+					} else if (result.error) {
+						return {
+							content: [{
+								type: "text",
+								text: `Error checking vulnerabilities: ${result.error}`
+							}]
+						};
+					} else {
+						return {
+							content: [{
+								type: "text",
+								text: `✅ ${packageName}@${version || 'latest'} appears to be safe to install.`
+							}]
+						};
+					}
+				} catch (apiError) {
+					console.error("API Error:", apiError);
+					// If API fails, use local vulnerability database as fallback
+					const localResult = await checkLocalVulnerability(ecosystem, packageName, version || 'latest');
+					if (localResult) {
+						return {
+							content: [{
+								type: "text",
+								text: `[OFFLINE MODE] Using local vulnerability database:\n${JSON.stringify(localResult, null, 2)}`
+							}]
+						};
+					} else {
+						return {
+							content: [{
+								type: "text",
+								text: `⚠️ Warning: Unable to check vulnerabilities (network error) and no local data available. Please verify package security manually.`
+							}]
+						};
+					}
 				}
 			} catch (error: any) {
 				return {
