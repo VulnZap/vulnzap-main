@@ -289,7 +289,7 @@ program
   .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip)', 'npm')
   .option('-v, --version <version>', 'Package version')
   .option('-C, --cache', 'Use cached results')
-  .option('-A, --ai', 'Use AI to check for vulnerabilities')
+  .option('-A, --ai', 'Use AI to get the summary of the vulnerabilities')
   .action(async (packageInput, options) => {
     displayBanner();
     let packageName, packageVersion, packageEcosystem;
@@ -355,7 +355,7 @@ program
       }
       if (result.isVulnerable) {
         console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities`));
-        if (result.processedVulnerabilities) {
+        if (result.processedVulnerabilities && result.processedVulnerabilities.summary) {
           console.log(chalk.green(`✓ LLM Processed: `));
           console.log('');
           console.log(`1. Summary: `);
@@ -417,6 +417,19 @@ program
           }
           if (cached.isVulnerable) {
             console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities`));
+            if (cached.processedVulnerabilities && cached.processedVulnerabilities.summary) {
+              console.log(chalk.green(`✓ LLM Processed: `));
+              console.log('');
+              console.log(`1. Summary: `);
+              console.log(`- ${cached.processedVulnerabilities.summary}`);
+              console.log(`2. Impact: `);
+              console.log(`- ${cached.processedVulnerabilities.impact}`);
+              console.log(`3. Recommendations: `);
+              cached.processedVulnerabilities.recommendations.forEach((recommendation: string) => {
+                console.log(`- ${recommendation}`);
+              });
+            }
+            
             if (cached.sources && cached.sources.length > 0) {
               console.log(`  Sources: ${cached.sources.join(', ')}`);
             }

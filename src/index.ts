@@ -496,16 +496,16 @@ export async function checkVulnerability(
 
 			const sources = []
 			if (data.vulnerabilities?.database?.length && data.vulnerabilities.database.length > 0) {
-				sources.push(...data.vulnerabilities.database)
+				sources.push("database")
 			}
 			if (data.vulnerabilities?.github?.length && data.vulnerabilities.github.length > 0) {
-				sources.push(...data.vulnerabilities.github)
+				sources.push("github")
 			}
 			if (data.vulnerabilities?.nvd?.length && data.vulnerabilities.nvd.length > 0) {
-				sources.push(...data.vulnerabilities.nvd)
+				sources.push("nvd")
 			}
 			if (data.vulnerabilities?.osv?.length && data.vulnerabilities.osv.length > 0) {
-				sources.push(...data.vulnerabilities.osv)
+				sources.push("osv")
 			}
 
 			result = {
