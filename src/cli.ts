@@ -460,87 +460,88 @@ program
     }
   });
 
-program
-  .command('sbom')
-  .description('Scan the current directory for SBOM (Software Bill of Materials)')
-  .option('--ecosystem <ecosystem>', 'Specific ecosystem to scan (npm, pip, go, rust)')
-  .option('--output <file>', 'Output file for SBOM results (JSON format)')
-  .action(async (options) => {
-    displayBanner();
-    try {
-      const { authenticated } = await auth.checkAuth();
-      if (!authenticated) {
-        console.error(chalk.red('Error: You must be logged in to scan for SBOM'));
-        console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
-        process.exit(1);
-      }
+// Unavailable feature for now (will be added in future updates)
+// program
+//   .command('sbom')
+//   .description('Scan the current directory for SBOM (Software Bill of Materials)')
+//   .option('--ecosystem <ecosystem>', 'Specific ecosystem to scan (npm, pip, go, rust)')
+//   .option('--output <file>', 'Output file for SBOM results (JSON format)')
+//   .action(async (options) => {
+//     displayBanner();
+//     try {
+//       const { authenticated } = await auth.checkAuth();
+//       if (!authenticated) {
+//         console.error(chalk.red('Error: You must be logged in to scan for SBOM'));
+//         console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
+//         process.exit(1);
+//       }
 
-      const checkAlreadyInitialized = await checkInit();
-      if (!checkAlreadyInitialized) {
-        console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
-        process.exit(1);
-      }
+//       const checkAlreadyInitialized = await checkInit();
+//       if (!checkAlreadyInitialized) {
+//         console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
+//         process.exit(1);
+//       }
 
-      const spinner = ora('Scanning for SBOM...').start();
+//       const spinner = ora('Scanning for SBOM...').start();
 
-      // Check if cyclonedx-bom is installed
-      try {
-        execSync('cdxgen --version', { stdio: 'ignore' });
-      } catch {
-        console.log(chalk.yellow('CycloneDX CLI not found. Installing globally...'));
-        try {
-          execSync('npm install -g @cyclonedx/cdxgen', { stdio: 'inherit' });
-        } catch (error: any) {
-          console.error(chalk.red('Error installing CycloneDX CLI (you can install it manually using `npm install -g @cyclonedx/cdxgen`):'), error.message);
-          process.exit(1);
-        }
-      }
+//       // Check if cyclonedx-bom is installed
+//       try {
+//         execSync('cdxgen --version', { stdio: 'ignore' });
+//       } catch {
+//         console.log(chalk.yellow('CycloneDX CLI not found. Installing globally...'));
+//         try {
+//           execSync('npm install -g @cyclonedx/cdxgen', { stdio: 'inherit' });
+//         } catch (error: any) {
+//           console.error(chalk.red('Error installing CycloneDX CLI (you can install it manually using `npm install -g @cyclonedx/cdxgen`):'), error.message);
+//           process.exit(1);
+//         }
+//       }
 
-      // Run CycloneDX to generate SBOM
-      try {
-        const sbomFile = path.join(process.cwd(), options.output || 'sbom.json');
-        execSync(`cdxgen -o ${sbomFile}`, { stdio: 'inherit' });
-        console.log(chalk.green('✓') + ` SBOM generated at ${sbomFile}`);
+//       // Run CycloneDX to generate SBOM
+//       try {
+//         const sbomFile = path.join(process.cwd(), options.output || 'sbom.json');
+//         execSync(`cdxgen -o ${sbomFile}`, { stdio: 'inherit' });
+//         console.log(chalk.green('✓') + ` SBOM generated at ${sbomFile}`);
 
-        // Read and parse the SBOM file
-        const sbomData = JSON.parse(fs.readFileSync(sbomFile, 'utf8'));
-        const packages = sbomData.components.map((component: any) => ({
-          packageName: component.name,
-          version: component.version,
-          ecosystem: component.type || 'unknown',
-        }));
+//         // Read and parse the SBOM file
+//         const sbomData = JSON.parse(fs.readFileSync(sbomFile, 'utf8'));
+//         const packages = sbomData.components.map((component: any) => ({
+//           packageName: component.name,
+//           version: component.version,
+//           ecosystem: component.type || 'unknown',
+//         }));
 
-        spinner.succeed('SBOM scan completed');
-        console.log(chalk.green('✓') + ' SBOM scan completed successfully');
-        console.log(chalk.green('✓') + ` Found ${packages.length} packages in the SBOM`);
-        console.log(chalk.green('✓') + ' Packages:');
-        packages.forEach((pkg: any) => {
-          console.log(`- ${pkg.packageName}@${pkg.version} (${pkg.ecosystem})`);
-        });
-        console.log(chalk.green('✓') + ' SBOM results saved to ' + sbomFile);
-        console.log(chalk.green('✓') + ' Sending SBOM results to VulnZap server...');
-        const sbomResults = {
-          id: uuidv4(),
-          packages: packages,
-          createdAt: new Date().toISOString(),
-        };
-        const response = await api.sendSbomResults(sbomResults);
-        if (response.status === 'success') {
-          console.log(chalk.green('✓') + ' SBOM results sent successfully');
-          console.log(chalk.green('✓') + ` The scan is added to the queue and you can view the results on this url: ${config.api.baseUrl}/dashboard/scans/${response.traceId}`);
-        } else {
-          console.log(chalk.red('Error: Failed to send SBOM results to VulnZap server'));
-        }
-        process.exit(0);
-      } catch (error: any) {
-        console.error(chalk.red('Error generating SBOM:'), error.message);
-        process.exit(1);
-      }
-    } catch (error) {
-      console.log(error)
-      process.exit(1)
-    }
-  });
+//         spinner.succeed('SBOM scan completed');
+//         console.log(chalk.green('✓') + ' SBOM scan completed successfully');
+//         console.log(chalk.green('✓') + ` Found ${packages.length} packages in the SBOM`);
+//         console.log(chalk.green('✓') + ' Packages:');
+//         packages.forEach((pkg: any) => {
+//           console.log(`- ${pkg.packageName}@${pkg.version} (${pkg.ecosystem})`);
+//         });
+//         console.log(chalk.green('✓') + ' SBOM results saved to ' + sbomFile);
+//         console.log(chalk.green('✓') + ' Sending SBOM results to VulnZap server...');
+//         const sbomResults = {
+//           id: uuidv4(),
+//           packages: packages,
+//           createdAt: new Date().toISOString(),
+//         };
+//         const response = await api.sendSbomResults(sbomResults);
+//         if (response.status === 'success') {
+//           console.log(chalk.green('✓') + ' SBOM results sent successfully');
+//           console.log(chalk.green('✓') + ` The scan is added to the queue and you can view the results on this url: ${config.api.baseUrl}/dashboard/scans/${response.traceId}`);
+//         } else {
+//           console.log(chalk.red('Error: Failed to send SBOM results to VulnZap server'));
+//         }
+//         process.exit(0);
+//       } catch (error: any) {
+//         console.error(chalk.red('Error generating SBOM:'), error.message);
+//         process.exit(1);
+//       }
+//     } catch (error) {
+//       console.log(error)
+//       process.exit(1)
+//     }
+//   });
 
 // Command: vulnzap connect
 program
