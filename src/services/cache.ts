@@ -19,6 +19,9 @@ export interface CacheService {
   isCacheStale(cacheFile: string): boolean;
   readCache(packageName: string, packageVersion: string, ecosystem: string): any | null;
   writeCache(packageName: string, packageVersion: string, ecosystem: string, data: any): void;
+  getDocsCacheFilePath(packageName: string): string;
+  readDocsCache(packageName: string): string | null;
+  writeDocsCache(packageName: string, docs: string): void;
 }
 
 class VulnZapCacheService implements CacheService {
@@ -58,6 +61,27 @@ class VulnZapCacheService implements CacheService {
     this.ensureCacheDir();
     const cacheFile = this.getCacheFilePath(packageName, packageVersion, ecosystem);
     fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2));
+  }
+
+  getDocsCacheFilePath(packageName: string): string {
+    return path.join(CACHE_DIR, `${packageName}.docs.txt`);
+  }
+
+  readDocsCache(packageName: string): string | null {
+    this.ensureCacheDir();
+    const cacheFile = this.getDocsCacheFilePath(packageName);
+    if (!fs.existsSync(cacheFile)) return null;
+    try {
+      return fs.readFileSync(cacheFile, 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  writeDocsCache(packageName: string, docs: string): void {
+    this.ensureCacheDir();
+    const cacheFile = this.getDocsCacheFilePath(packageName);
+    fs.writeFileSync(cacheFile, docs, 'utf8');
   }
 }
 

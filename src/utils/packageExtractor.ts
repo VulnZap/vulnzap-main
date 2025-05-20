@@ -1,6 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import { parse as parseToml } from '@iarna/toml';
+import { DOMParser } from '@xmldom/xmldom';
+import xpath from 'xpath';
 
 interface PackageInfo {
   packageName: string;
@@ -123,6 +125,102 @@ function extractFromCargoToml(filePath: string): PackageInfo[] {
 }
 
 /**
+ * Extract packages from pom.xml (Maven)
+ */
+function extractFromPomXml(filePath: string): PackageInfo[] {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const packages: PackageInfo[] = [];
+  
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/xml');
+    
+    // Get dependencies - cast doc to any to avoid type issues with xpath
+    const dependencies = xpath.select('//dependency', doc as any) as Node[];
+    
+    for (const dep of dependencies) {
+      const groupId = xpath.select('string(./groupId)', dep) as string;
+      const artifactId = xpath.select('string(./artifactId)', dep) as string;
+      const version = xpath.select('string(./version)', dep) as string;
+      
+      if (groupId && artifactId && version) {
+        packages.push({
+          packageName: `${groupId}:${artifactId}`,
+          ecosystem: 'maven',
+          version: version
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`Error parsing pom.xml: ${filePath}`, error);
+  }
+  
+  return packages;
+}
+
+/**
+ * Extract packages from .csproj (.NET)
+ */
+function extractFromCsproj(filePath: string): PackageInfo[] {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const packages: PackageInfo[] = [];
+  
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(content, 'text/xml');
+    
+    // Get PackageReference elements - cast doc to any to avoid type issues with xpath
+    const packageRefs = xpath.select('//PackageReference', doc as any) as Node[];
+    
+    for (const pkg of packageRefs) {
+      // Need to cast to Element to access getAttribute
+      const element = pkg as unknown as Element;
+      const packageName = element.getAttribute('Include');
+      const version = element.getAttribute('Version');
+      
+      if (packageName && version) {
+        packages.push({
+          packageName,
+          ecosystem: 'nuget',
+          version
+        });
+      }
+    }
+  } catch (error) {
+    console.error(`Error parsing .csproj: ${filePath}`, error);
+  }
+  
+  return packages;
+}
+
+/**
+ * Extract packages from build.gradle (Gradle)
+ */
+function extractFromGradle(filePath: string): PackageInfo[] {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const packages: PackageInfo[] = [];
+  
+  // This is a simplified regex approach - for production use, 
+  // a proper Gradle DSL parser would be better
+  const implementationRegex = /(?:implementation|api|compile|testImplementation|runtimeOnly)\s+['"]([^:]+):([^:]+):([^'"]+)['"]/g;
+  let match;
+  
+  while ((match = implementationRegex.exec(content)) !== null) {
+    const groupId = match[1];
+    const artifactId = match[2];
+    const version = match[3];
+    
+    packages.push({
+      packageName: `${groupId}:${artifactId}`,
+      ecosystem: 'gradle',
+      version
+    });
+  }
+  
+  return packages;
+}
+
+/**
  * Find and extract packages from package manager files in a directory
  */
 export function extractPackagesFromDirectory(dirPath: string, ecosystem?: string): PackageInfo[] {
@@ -135,7 +233,7 @@ export function extractPackagesFromDirectory(dirPath: string, ecosystem?: string
 
     if (stats.isDirectory()) {
       // Skip node_modules and other common dependency directories
-      if (['node_modules', 'vendor', 'target', '.git'].includes(file)) continue;
+      if (['node_modules', 'vendor', 'target', '.git', 'bin', 'obj'].includes(file)) continue;
       packages = packages.concat(extractPackagesFromDirectory(filePath, ecosystem));
     } else {
       if (ecosystem === 'npm' || !ecosystem) {
@@ -156,6 +254,21 @@ export function extractPackagesFromDirectory(dirPath: string, ecosystem?: string
       if (ecosystem === 'rust' || !ecosystem) {
         if (file === 'Cargo.toml') {
           packages = packages.concat(extractFromCargoToml(filePath));
+        }
+      }
+      if (ecosystem === 'maven' || !ecosystem) {
+        if (file === 'pom.xml') {
+          packages = packages.concat(extractFromPomXml(filePath));
+        }
+      }
+      if (ecosystem === 'nuget' || !ecosystem) {
+        if (file.endsWith('.csproj')) {
+          packages = packages.concat(extractFromCsproj(filePath));
+        }
+      }
+      if (ecosystem === 'gradle' || !ecosystem) {
+        if (file === 'build.gradle' || file === 'build.gradle.kts') {
+          packages = packages.concat(extractFromGradle(filePath));
         }
       }
     }

@@ -7,7 +7,8 @@ import path from 'path';
 import os from 'os';
 import chalk from 'chalk';
 
-const API_BASE_URL = 'https://vulnzap.com';
+// const API_BASE_URL = 'https://vulnzap.com';
+const API_BASE_URL = 'http://localhost:3000';
 const AUTH_PORT = 54321;
 
 interface AuthSession {

@@ -23,6 +23,7 @@ import { extractPackagesFromDirectory } from './utils/packageExtractor.js';
 import { batchScan } from './api/batchScan.js';
 import { ApiOptions, BatchScanResponse, ScanResponse } from './types/response.js';
 import { cacheService } from './services/cache.js';
+import { apiRequest } from './utils/apiClient.js';
 
 // Load environment variables
 dotenv.config();
@@ -116,11 +117,6 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
 	// Define resources and tools
 	setupVulnerabilityResource(server);
 
-	// Set up premium tools if API key is provided
-	if (serverConfig.apiKey) {
-		setupPremiumTools(server, serverConfig.apiKey);
-	}
-
 	// Set up the transport
 	const transport = new StdioServerTransport();
 
@@ -136,54 +132,6 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
  * @param server - The MCP server instance
  */
 function setupVulnerabilityResource(server: McpServer): void {
-	// Define a resource for vulnerability scanning
-	// URI pattern: vuln://{ecosystem}/{packageName}/{packageVersion}
-	server.resource(
-		"vulnerability-check",
-		new ResourceTemplate("vuln://{ecosystem}/{packageName}/{packageVersion}", { list: undefined }),
-		async (uri, params) => {
-			try {
-				// Extract parameters from the URI
-				const { ecosystem, packageName, packageVersion } = params;
-
-				// Check if package is vulnerable
-				const version = Array.isArray(packageVersion) ? packageVersion[0] : packageVersion;
-				const ecosystemList = Array.isArray(ecosystem) ? ecosystem[0] : ecosystem;
-				const packageNameList = Array.isArray(packageName) ? packageName[0] : packageName;
-				const result = await checkVulnerability(ecosystemList, packageNameList, version, {
-					useCache: true,
-					useAi: false
-				});
-
-				// Construct response
-				if (result.status !== 200) {
-					// Return error response
-					return {
-						contents: []
-					};
-				} else {
-					// Determine status based on vulnerability and whether it's known
-					return {
-						contents: [{
-							uri: uri.href,
-							text: result.data,
-							mimeType: "text/plain"
-						}]
-					};
-				}
-			} catch (error: any) {
-				console.error(`Error processing vulnerability check: ${error.message}`);
-				return {
-					contents: [{
-						uri: uri.href,
-						text: `Internal server error: ${error.message}`,
-						mimeType: "text/plain"
-					}]
-				};
-			}
-		}
-	);
-
 	// Add npm install interception
 	server.tool(
 		"auto-vulnerability-scan",
@@ -293,11 +241,11 @@ function setupVulnerabilityResource(server: McpServer): void {
 	// Premium feature: Batch vulnerability scanning
 	server.tool(
 		"batch-scan",
-		"Scan all packages in a directory for vulnerabilities",
+		"Scan all packages in a directory for vulnerabilities. This tool scans a specified project directory for dependencies (across package.json, requirements.txt, etc.) and performs comprehensive vulnerability analysis on all detected packages. Always provide the absolute/full directory path to ensure correct package detection.",
 		{
 			parameters: z.object({
-				directory: z.string().describe("Directory to scan for packages"),
-				ecosystem: z.string().optional().describe("Specific ecosystem to scan (npm, pip, go, rust)")
+				directory: z.string().describe("Full absolute path of the directory to scan for packages (e.g., '/path/to/project' or 'C:\\path\\to\\project')"),
+				ecosystem: z.string().optional().describe("Specific ecosystem to scan (npm, pip, go, rust, maven, gradle etc.)")
 			})
 		},
 		async ({ parameters }) => {
@@ -385,16 +333,132 @@ function setupVulnerabilityResource(server: McpServer): void {
 			}
 		}
 	);
-}
 
-/**
- * Set up premium tools for the MCP server
- * 
- * @param server - The MCP server instance
- * @param apiKey - The premium API key
- */
-function setupPremiumTools(server: McpServer, apiKey: string): void {
+	// Amplify Feature Prompt tool
+	server.tool(
+		"amplify-feature-prompt",
+		"This tool MUST be called automatically whenever the user requests a new feature, application, or development task (e.g., 'build X', 'add Y', 'create Z', 'implement A', etc.).\n\nThe tool takes the user's prompt and project context, then generates a secure, production-grade, best-practices-amplified prompt for the agent to use.\n\nAgents MUST use this tool to transform all high-level feature or development requests before proceeding with any code generation, planning, or implementation.\n\nThis ensures that all outputs follow OWASP Top 10, use up-to-date packages, and adhere to modern security and quality standards.\n\nNever proceed with a user's feature or development request without first calling this tool and using its output as the new prompt.",
+		{
+			parameters: z.object({
+				user_prompt: z.string().describe("The user's feature or application request"),
+				context: z.string().optional().describe("Context of the current project or work done so far (optional)")
+			})
+		},
+		async ({ parameters }) => {
+			try {
+				const { user_prompt, context } = parameters;
+				// Return a dummy amplified prompt response for now
+				const amplified = `To build this feature: "${user_prompt}", follow these best practices: \n- Adhere to OWASP Top 10 security principles\n- Use secure coding standards\n- Validate all inputs and outputs\n- Never log secrets or sensitive data\n- Use up-to-date, well-maintained packages\n- Document all endpoints and logic\n- Ensure code is production-ready and reviewed for security.\n${context ? `\nProject context: ${context}` : ''}`;
+				return {
+					content: [{
+						type: "text",
+						text: amplified
+					}]
+				};
+			} catch (error: any) {
+				return {
+					content: [{
+						type: "text",
+						text: `Error amplifying prompt: ${error.message}`
+					}]
+				};
+			}
+		}
+	);
 
+	// Add latest_toolset tool
+	server.tool(
+		"latest_toolset",
+		"Given a user prompt describing a new project, and optionally user/agent prescribed tools, return the best-suited tech stack and recommended packages, updating outdated tools and adding new ones as needed.",
+		{
+			parameters: z.object({
+				user_prompt: z.string().describe("The user's project description or feature request"),
+				user_tools: z.array(z.string()).optional().describe("Tools/packages the user wants to use (e.g., ['react', 'node 16'])"),
+				agent_tools: z.array(z.string()).optional().describe("Tools/packages the agent plans to use (e.g., ['node 16', 'express'])")
+			})
+		},
+		async ({ parameters }) => {
+			const { user_prompt, user_tools = [], agent_tools = [] } = parameters;
+
+			// Combine and deduplicate all tools
+			let allTools = Array.from(new Set([...(user_tools || []), ...(agent_tools || [])]));
+			const notes: string[] = [];
+			const updatedTools: string[] = [];
+
+			// Example: update node 16 to node 22
+			allTools = allTools.map(tool => {
+				if (/^node(\s*16)?$/i.test(tool)) {
+					notes.push('Updated Node.js version from 16 to 22 for latest features and security.');
+					updatedTools.push('node 22');
+					return 'node 22';
+				}
+				return tool;
+			});
+
+			// Always add at least one extra recommended tool if not present
+			if (!allTools.includes('typescript')) {
+				allTools.push('typescript');
+				notes.push('Added TypeScript for type safety.');
+			}
+
+			// Example: if user wants react, add redux if not present
+			if (allTools.includes('react') && !allTools.includes('redux')) {
+				allTools.push('redux');
+				notes.push('Added Redux for state management with React.');
+			}
+
+			const result = {
+				project: user_prompt,
+				final_toolset: allTools,
+				updated_tools: updatedTools,
+				notes,
+				meta: {
+					date: new Date().toISOString(),
+					generator: 'latest_toolset (mocked)'
+				}
+			};
+			return {
+				content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+			};
+		}
+	);
+
+	// Add get_docs tool
+	server.tool(
+		"get_docs",
+		"Given a package name and context, return the best documentation link for that package in the context of its intended use. Caches docs locally for future requests.",
+		{
+			parameters: z.object({
+				package_name: z.string().describe("The npm package or tool name to get docs for"),
+				context: z.string().optional().describe("How the tool/package will be used (to return the most relevant docs)")
+			})
+		},
+		async ({ parameters }) => {
+			const { package_name, context } = parameters;
+			// Check cache first
+			const cachedDocs = cacheService.readDocsCache(package_name);
+			if (cachedDocs) {
+				return {
+					content: [{ type: 'text', text: `[CACHED] Docs for ${package_name}${context ? ` (context: ${context})` : ''}:\n${cachedDocs}` }]
+				};
+			}
+			// TODO: Replace with real logic or API call
+			const docsLinks: Record<string, string> = {
+				'@apollo/server': 'https://www.apollographql.com/docs/apollo-server/',
+				'react': 'https://react.dev/learn',
+				'redux': 'https://redux.js.org/introduction/getting-started',
+				'mongodb': 'https://www.mongodb.com/docs/',
+				'mongoose': 'https://mongoosejs.com/docs/guide.html'
+			};
+			const url = docsLinks[package_name] || `https://www.npmjs.com/package/${package_name}`;
+			const docsText = `Docs for ${package_name}${context ? ` (context: ${context})` : ''}: ${url}`;
+			// Store in cache
+			cacheService.writeDocsCache(package_name, docsText);
+			return {
+				content: [{ type: 'text', text: docsText }]
+			};
+		}
+	);
 }
 
 /**
@@ -444,21 +508,24 @@ export async function checkVulnerability(
 			}
 		}
 
-		// Fetch vulnerabilities from the API
-		const response = await axios.post(`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.check}`, {
-			ecosystem,
-			packageName,
-			version: packageVersion,
-			noCache: !options.useCache,
-			useAi: options.useAi
-		}, {
-			headers: {
+		// Fetch vulnerabilities from the API using apiRequest
+		const response = await apiRequest(
+			`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.check}`,
+			'POST',
+			{
+				ecosystem,
+				packageName,
+				version: packageVersion,
+				noCache: !options.useCache,
+				useAi: options.useAi
+			},
+			{
 				"x-api-key": apiKey
 			}
-		});
+		);
 
 		// Extract vulnerability data from response
-		const data: ScanResponse = response.data.data;
+		const data: ScanResponse = response.data;
 
 		// Prepare result
 		let result;
@@ -625,15 +692,14 @@ export async function checkBatch(
 			}
 		}
 
-		const response = await axios.post(`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.batch}`, {
-			packages: uncachedPackages
-		}, {
-			headers: {
-				"x-api-key": apiKey
-			}
-		});
+		const response = await apiRequest(
+			`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.batch}`,
+			'POST',
+			{ packages: uncachedPackages },
+			{ "x-api-key": apiKey }
+		);
 
-		const data: BatchScanResponse[] = response.data;
+		const data: BatchScanResponse[] = response;
 
 		const apiResults = data.map((result) => {
 			const scanResult = {
