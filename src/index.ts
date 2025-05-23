@@ -160,12 +160,17 @@ function setupVulnerabilityResource(server: McpServer): void {
 				// First try to get from cache
 				const cachedResult = cacheService.readCache(packageName, version || 'latest', ecosystem);
 				if (cachedResult) {
-					console.log("Found result in cache");
 					if (cachedResult.isVulnerable) {
+						let actionLine = '';
+						if (cachedResult.fixedVersions && cachedResult.fixedVersions.length > 0) {
+							actionLine = `\nAction: Please update your package.json to use ${packageName}@${cachedResult.fixedVersions[0]} and run npm install to mitigate these issues.`;
+						} else {
+							actionLine = `\nAction: No fixed version is available. Consider using an alternative package or implementing additional security controls as described in the advisories.`;
+						}
 						return {
 							content: [{
 								type: "text",
-								text: `⚠️ [CACHED] Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(cachedResult.advisories, null, 2)}\n\nRecommendation: ${cachedResult.message}`
+								text: `⚠️ [CACHED] Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(cachedResult.advisories, null, 2)}\n\nRecommendation: ${cachedResult.message}${actionLine}`
 							}]
 						};
 					} else {
@@ -186,10 +191,16 @@ function setupVulnerabilityResource(server: McpServer): void {
 					});
 
 					if (result.isVulnerable) {
+						let actionLine = '';
+						if (result.fixedVersions && result.fixedVersions.length > 0) {
+							actionLine = `\nAction: Please update your package.json to use ${packageName}@${result.fixedVersions[0]} and run npm install to mitigate these issues.`;
+						} else {
+							actionLine = `\nAction: No fixed version is available. Consider using an latest version of ${packageName} or implementing additional security controls as described in the advisories.`;
+						}
 						return {
 							content: [{
 								type: "text",
-								text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(result.advisories, null, 2)}\n\nRecommendation: ${result.message}`
+								text: `⚠️ Security Warning: ${packageName}@${version} has known vulnerabilities:\n\n${JSON.stringify(result.advisories, null, 2)}\n\nRecommendation: ${result.message}${actionLine}`
 							}]
 						};
 					} else if (result.error) {
@@ -211,11 +222,17 @@ function setupVulnerabilityResource(server: McpServer): void {
 					console.error("API Error:", apiError);
 					// If API fails, use local vulnerability database as fallback
 					const localResult = await checkLocalVulnerability(ecosystem, packageName, version || 'latest');
+					let actionLine = '';
 					if (localResult) {
+						if (localResult.fixedVersions && localResult.fixedVersions.length > 0) {
+							actionLine = `\nAction: Please update your package.json to use ${packageName}@${localResult.fixedVersions[0]} and run npm install to mitigate these issues.`;
+						} else {
+							actionLine = `\nAction: No fixed version is available. Consider using an latest version of ${packageName} or implementing additional security controls as described in the advisories.`;
+						}
 						return {
 							content: [{
 								type: "text",
-								text: `[OFFLINE MODE] Using local vulnerability database:\n${JSON.stringify(localResult, null, 2)}`
+								text: `[OFFLINE MODE] Using local vulnerability database:\n${JSON.stringify(localResult, null, 2)}\n\nRecommendation: ${localResult.message}${actionLine}`
 							}]
 						};
 					} else {
@@ -265,15 +282,35 @@ function setupVulnerabilityResource(server: McpServer): void {
 				}
 
 				// Perform batch scan
-				const results = await batchScan(packages, {
+				const apiResponse = await batchScan(packages, {
 					useCache: true,
 					useAi: false
 				});
 
-				// Format results
-				const vulnerableCount = results.results.filter(r => r.status === 'vulnerable').length;
-				const safeCount = results.results.filter(r => r.status === 'safe').length;
-				const errorCount = results.results.filter(r => r.status === 'error').length;
+				// Type guard for apiResponse.data
+				const results: any[] = (apiResponse && typeof apiResponse === 'object' && 'data' in apiResponse && Array.isArray((apiResponse as any).data)) ? (apiResponse as any).data : [];
+
+				const formattedResults = results.map((entry: any) => {
+					const { package: pkg, result, processedResult } = entry;
+					const advisories = [
+						...(result.dataSources?.github || []),
+						...(result.dataSources?.nvd || []),
+						...(result.dataSources?.osv || []),
+						...(result.dataSources?.database || [])
+					];
+					return {
+						package: pkg,
+						status: result.found ? 'vulnerable' : 'safe',
+						message: result.message,
+						advisories,
+						processedResult,
+						remediation: entry.remediation // if present
+					};
+				});
+
+				const vulnerableCount = formattedResults.filter((r: any) => r.status === 'vulnerable').length;
+				const safeCount = formattedResults.filter((r: any) => r.status === 'safe').length;
+				const errorCount = formattedResults.filter((r: any) => r.status === 'error').length;
 
 				let report = `# Batch Vulnerability Scan Results\n\n`;
 				report += `Scanned ${packages.length} packages\n\n`;
@@ -284,30 +321,28 @@ function setupVulnerabilityResource(server: McpServer): void {
 
 				if (vulnerableCount > 0) {
 					report += `## Vulnerable Packages\n\n`;
-					results.results
-						.filter(r => r.status === 'vulnerable')
-						.forEach(result => {
+					formattedResults
+						.filter((r: any) => r.status === 'vulnerable')
+						.forEach((result: any) => {
 							report += `### ${result.package.packageName}@${result.package.version} (${result.package.ecosystem})\n\n`;
 							report += `${result.message}\n\n`;
-
-							if (result.vulnerabilities) {
-								result.vulnerabilities.forEach(vuln => {
-									report += `- ${vuln.title} (${vuln.severity})\n`;
-									report += `  ${vuln.description}\n`;
+							if (result.advisories) {
+								result.advisories.forEach((vuln: any) => {
+									report += `- ${vuln.title || vuln.summary} (${vuln.severity})\n`;
+									report += `  ${vuln.description || vuln.summary}\n`;
 									if (vuln.references?.length) {
 										report += `  References: ${vuln.references.join(', ')}\n`;
 									}
 									report += '\n';
 								});
 							}
-
 							if (result.remediation) {
 								report += `#### Remediation\n\n`;
 								report += `- Update to ${result.remediation.recommendedVersion}\n`;
 								report += `- ${result.remediation.notes}\n`;
 								if (result.remediation.alternativePackages?.length) {
 									report += `- Alternative packages:\n`;
-									result.remediation.alternativePackages.forEach(pkg => {
+									(result.remediation.alternativePackages as string[]).forEach((pkg: string) => {
 										report += `  - ${pkg}\n`;
 									});
 								}
@@ -319,7 +354,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 				return {
 					content: [{
 						type: "text",
-						text: report
+						text: `Here are the results of the batch scan, summarise it to the user and propose your actions:\n\n${report}`
 					}]
 				};
 
@@ -341,14 +376,35 @@ function setupVulnerabilityResource(server: McpServer): void {
 		{
 			parameters: z.object({
 				user_prompt: z.string().describe("The user's feature or application request"),
-				context: z.string().optional().describe("Context of the current project or work done so far (optional)")
+				context: z.string().optional().describe("Context of the current project or work done, practices followed so far (optional)")
 			})
 		},
 		async ({ parameters }) => {
+			const apiKey = await getKey();
+			if (!apiKey) {
+				return {
+					content: [{ type: 'text', text: 'VulnZap API key not configured. Please set VULNZAP_API_KEY environment variable or run vulnzap setup to configure your API key.' }]
+				};
+			}
 			try {
 				const { user_prompt, context } = parameters;
+				
+				const response = await apiRequest(
+					`${config.api.baseUrl}${config.api.addOn}${config.api.ai.base}`,
+					'POST',
+					{ user_prompt, context },
+					{ "x-api-key": apiKey }
+				);
+
+				if (response.error) {
+					return {
+						content: [{ type: 'text', text: `Error amplifying prompt: ${response.error}` }]
+					};
+				}
+				
 				// Return a dummy amplified prompt response for now
-				const amplified = `To build this feature: "${user_prompt}", follow these best practices: \n- Adhere to OWASP Top 10 security principles\n- Use secure coding standards\n- Validate all inputs and outputs\n- Never log secrets or sensitive data\n- Use up-to-date, well-maintained packages\n- Document all endpoints and logic\n- Ensure code is production-ready and reviewed for security.\n${context ? `\nProject context: ${context}` : ''}`;
+				const amplified = `To build this feature, use this amplified prompt: "${response.amplified_prompt}", and follow these checklist: ${response.checklist}. Make sure you remember this and use it for all future prompts.`;
+
 				return {
 					content: [{
 						type: "text",
@@ -467,6 +523,137 @@ function setupVulnerabilityResource(server: McpServer): void {
 			};
 		}
 	);
+
+	// Add milestone-security-check tool
+	// server.tool(
+	// 	"milestone-security-check",
+	// 	"Run security and stress tests at project milestones (e.g., after API implementation). Starts the API server, runs rate-limit, DDoS, and other tests, and reports results.",
+	// 	{
+	// 		parameters: z.object({
+	// 			milestone_name: z.string().describe("Name of the project milestone (e.g., 'API implementation complete')"),
+	// 			start_server_command: z.string().describe("Command to start the API server (e.g., 'npm run start:api')"),
+	// 			api_base_url: z.string().describe("Base URL of the API server (e.g., 'http://localhost:3000')"),
+	// 			test_scripts: z.array(z.string()).optional().describe("List of test scripts/types to run (e.g., ['rate-limit', 'ddos'])")
+	// 		})
+	// 	},
+	// 	async ({ parameters }) => {
+	// 		const { milestone_name, start_server_command, api_base_url, test_scripts = ["rate-limit", "ddos"] } = parameters;
+	// 		const { spawn } = await import('child_process');
+	// 		const axios = (await import('axios')).default;
+
+	// 		let report = `# Milestone Security Check: ${milestone_name}\n`;
+	// 		let serverProcess = null;
+	// 		let serverStarted = false;
+	// 		let serverOutput = '';
+	// 		try {
+	// 			// Start the API server
+	// 			const [cmd, ...args] = start_server_command.split(' ');
+	// 			serverProcess = spawn(cmd, args, { shell: true, detached: true });
+	// 			serverProcess.stdout.on('data', (data) => { serverOutput += data.toString(); });
+	// 			serverProcess.stderr.on('data', (data) => { serverOutput += data.toString(); });
+
+	// 			// Wait for server to be up (poll /health or root endpoint)
+	// 			const healthUrl = api_base_url.replace(/\/$/, '') + '/health';
+	// 			const maxWait = 20000; // 20s
+	// 			const interval = 1000;
+	// 			let waited = 0;
+	// 			let healthOk = false;
+	// 			while (waited < maxWait) {
+	// 				try {
+	// 					await axios.get(healthUrl, { timeout: 2000 });
+	// 					healthOk = true;
+	// 					break;
+	// 				} catch (e) {
+	// 					await new Promise(res => setTimeout(res, interval));
+	// 					waited += interval;
+	// 				}
+	// 			}
+	// 			if (!healthOk) {
+	// 				report += '\n❌ API server did not respond at ' + healthUrl + ' after 20s.\n';
+	// 				if (serverProcess && serverProcess.pid) { process.kill(-serverProcess.pid); }
+	// 				return { content: [{ type: 'text', text: report }] };
+	// 			}
+	// 			serverStarted = true;
+	// 			report += '\n✅ API server started and responded at ' + healthUrl + '\n';
+
+	// 			// Run test scripts
+	// 			for (const script of test_scripts) {
+	// 				if (script === 'rate-limit') {
+	// 					report += '\n---\n**Rate-limit Test**\n';
+	// 					let rateLimitResult = '';
+	// 					try {
+	// 						let success = 0, rateLimited = 0, errors = 0;
+	// 						for (let i = 0; i < 50; i++) {
+	// 							try {
+	// 								await axios.get(api_base_url + '/test-rate', { timeout: 1000 });
+	// 								success++;
+	// 							} catch (err: any) {
+	// 								if (err.response && err.response.status === 429) rateLimited++;
+	// 								else errors++;
+	// 							}
+	// 						}
+	// 						rateLimitResult = `Requests: 50, Success: ${success}, Rate-limited: ${rateLimited}, Errors: ${errors}`;
+	// 						report += rateLimitResult + '\n';
+	// 						if (rateLimited > 0) report += '✅ Rate-limiting appears to be enforced.\n';
+	// 						else report += '❌ No rate-limiting detected.\n';
+	// 					} catch (e: any) {
+	// 						report += 'Error during rate-limit test: ' + e.message + '\n';
+	// 					}
+	// 				}
+	// 				else if (script === 'ddos') {
+	// 					report += '\n---\n**DDoS Simulation**\n';
+	// 					let ddosResult = '';
+	// 					try {
+	// 						const requests = [];
+	// 						for (let i = 0; i < 200; i++) {
+	// 							requests.push(axios.get(api_base_url + '/test-ddos', { timeout: 1000 }).catch(e => e));
+	// 						}
+	// 						const results = await Promise.all(requests);
+	// 						const ok = results.filter(r => r.status && r.status < 500).length;
+	// 						const errors = results.length - ok;
+	// 						ddosResult = `Requests: 200, Success: ${ok}, Errors: ${errors}`;
+	// 						report += ddosResult + '\n';
+	// 						if (errors > 0) report += '⚠️ Some requests failed under load.\n';
+	// 						else report += '✅ Server handled DDoS simulation.\n';
+	// 					} catch (e: any) {
+	// 						report += 'Error during DDoS test: ' + e.message + '\n';
+	// 					}
+	// 				}
+	// 				else {
+	// 					report += `\n---\nUnknown test script: ${script}\n`;
+	// 				}
+	// 			}
+	// 		} finally {
+	// 			// Write the report to a log file in the API server directory
+	// 			try {
+	// 				const fs = await import('fs');
+	// 				const path = await import('path');
+	// 				const os = await import('os');
+	// 				// Try to infer the working directory from the start_server_command (first arg is usually the script)
+	// 				let homeDir = os.homedir();
+	// 				const logPath = path.join(homeDir, '.vulnzap', 'milestone-security-report.log');
+	// 				fs.writeFileSync(logPath, report, 'utf-8');
+	// 				console.log(`Milestone security report written to: ${logPath}`);
+	// 			} catch (e: any) {
+	// 				console.error('Failed to write milestone security report log:', e.message);
+	// 			}
+	// 			// Clean up: kill server process if started
+	// 			if (serverProcess && serverStarted && serverProcess.pid) {
+	// 				try {
+	// 					// Check if process is still running before killing
+	// 					process.kill(-serverProcess.pid, 0); // throws if not running
+	// 					process.kill(-serverProcess.pid);
+	// 				} catch (e: any) {
+	// 					if (e.code !== 'ESRCH') {
+	// 						report += `\n(Server process stop error: ${e.message})\n`;
+	// 					}
+	// 				}
+	// 				report += '\n(Server process stopped)\n';
+	// 			}
+	// 		}
+	// 		return { content: [{ type: 'text', text: report }] };
+	// 	}
+	// );
 }
 
 /**
@@ -674,7 +861,7 @@ export async function checkBatch(
 
 		if (uncachedPackages.length === 0) {
 			return {
-				results: results.filter(r => r !== null),
+				results: results.filter((r: any) => r !== null),
 				message: `All results retrieved from cache.`
 			};
 		}
@@ -689,9 +876,7 @@ export async function checkBatch(
 			};
 		}
 
-		const {
-			success
-		} = await checkAuth();
+		const { success } = await checkAuth();
 
 		if (!success) {
 			return {
@@ -707,30 +892,29 @@ export async function checkBatch(
 			{ "x-api-key": apiKey }
 		);
 
-		const data: BatchScanResponse[] = response;
+		// The new API response format:
+		// { message, status, data: [ { package, result, processedResult } ] }
+		const data: any[] = (response && typeof response === 'object' && 'data' in response && Array.isArray((response as any).data)) ? (response as any).data : [];
 
-		const apiResults = data.map((result) => {
-			const scanResult = {
-				package: result.package,
-				status: result.result.found ? 'vulnerable' : 'safe',
-				message: result.result.message,
-				vulnerabilities: result.result.dataSources,
-				processedResult: result.processedResult
+		const apiResults = data.map((entry: any) => {
+			const { package: pkg, result, processedResult } = entry;
+			const advisories = [
+				...(result.dataSources?.github || []),
+				...(result.dataSources?.nvd || []),
+				...(result.dataSources?.osv || []),
+				...(result.dataSources?.database || [])
+			];
+			return {
+				package: pkg,
+				status: result.found ? 'vulnerable' : 'safe',
+				message: result.message,
+				advisories,
+				processedResult
 			};
-
-			// Cache the result
-			cacheService.writeCache(
-				result.package.packageName,
-				result.package.version,
-				result.package.ecosystem,
-				scanResult
-			);
-
-			return scanResult;
 		});
 
 		// Combine cached and new results
-		const finalResults = results.map((r, i) => r || apiResults[i]);
+		const finalResults = results.map((r: any, i: number) => r || apiResults[i]);
 
 		return {
 			results: finalResults,

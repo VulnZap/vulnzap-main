@@ -15,13 +15,9 @@ export async function runWithBackoff<T>(fn: () => Promise<T>, maxRetries = 5, in
       return await fn();
     } catch (error: any) {
       attempt++;
-      // Only retry on 5xx or network errors
+      // Only retry on 500 or 503 errors
       const isRetryable =
-        (error.response && error.response.status >= 500 && error.response.status < 600) ||
-        error.code === 'ECONNABORTED' ||
-        error.code === 'ENOTFOUND' ||
-        error.code === 'ECONNRESET' ||
-        error.isAxiosError;
+        (error.response && (error.response.status === 500 || error.response.status === 503));
       if (!isRetryable || attempt > maxRetries) {
         throw error;
       }
