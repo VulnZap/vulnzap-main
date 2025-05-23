@@ -50,8 +50,8 @@ export const config = {
 
   // API endpoints
   api: {
-    baseUrl: 'http://localhost:4000',
-    // baseUrl: 'https://vulnzap-server.vercel.app',
+    // baseUrl: 'http://localhost:4000',
+    baseUrl: 'https://vulnzap-server.vercel.app',
     addOn: '/api/v1',
     vulnerability: {
       check: '/vulnzap/scan',
