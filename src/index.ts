@@ -378,47 +378,43 @@ function setupVulnerabilityResource(server: McpServer): void {
 			})
 		},
 		async ({ parameters }) => {
+			const apiKey = await getKey();
+			if (!apiKey) {
+				return {
+					content: [{ type: 'text', text: 'VulnZap API key not configured. Please set VULNZAP_API_KEY environment variable or run vulnzap setup to configure your API key.' }]
+				};
+			}
+
 			const { user_prompt, user_tools = [], agent_tools = [] } = parameters;
 
-			// Combine and deduplicate all tools
-			let allTools = Array.from(new Set([...(user_tools || []), ...(agent_tools || [])]));
-			const notes: string[] = [];
-			const updatedTools: string[] = [];
+			// Check cache first
+			const cachedToolset = cacheService.readLatestToolsetCache(user_prompt, user_tools, agent_tools);
+			if (cachedToolset) {
+				return {
+					content: [{ type: 'text', text: `[CACHED] Toolset for "${user_prompt}":\n${JSON.stringify(cachedToolset, null, 2)}` }]
+				};
+			}
+			
+			const response = await apiRequest(
+				`${config.api.baseUrl}${config.api.addOn}${config.api.tools.base}`,
+				'POST',
+				{ user_prompt, user_tools, agent_tools },
+				{ "x-api-key": apiKey }
+			);
 
-			// Example: update node 16 to node 22
-			allTools = allTools.map(tool => {
-				if (/^node(\s*16)?$/i.test(tool)) {
-					notes.push('Updated Node.js version from 16 to 22 for latest features and security.');
-					updatedTools.push('node 22');
-					return 'node 22';
-				}
-				return tool;
-			});
-
-			// Always add at least one extra recommended tool if not present
-			if (!allTools.includes('typescript')) {
-				allTools.push('typescript');
-				notes.push('Added TypeScript for type safety.');
+			if (response.error) {
+				return {
+					content: [{ type: 'text', text: `Error getting toolset: ${response.error}` }]
+				};
 			}
 
-			// Example: if user wants react, add redux if not present
-			if (allTools.includes('react') && !allTools.includes('redux')) {
-				allTools.push('redux');
-				notes.push('Added Redux for state management with React.');
-			}
+			const data = response.toolset;
 
-			const result = {
-				project: user_prompt,
-				final_toolset: allTools,
-				updated_tools: updatedTools,
-				notes,
-				meta: {
-					date: new Date().toISOString(),
-					generator: 'latest_toolset (mocked)'
-				}
-			};
+			// Store in cache
+			cacheService.writeLatestToolsetCache(user_prompt, user_tools, agent_tools, data);
+
 			return {
-				content: [{ type: 'text', text: JSON.stringify(result, null, 2) }]
+				content: [{ type: 'text', text: `${JSON.stringify(data, null, 2)}` }]
 			};
 		}
 	);
@@ -426,14 +422,21 @@ function setupVulnerabilityResource(server: McpServer): void {
 	// Add get_docs tool
 	server.tool(
 		"get_docs",
-		"Given a package name and context, return the best documentation link for that package in the context of its intended use. Caches docs locally for future requests.",
+		"Run this tool whenever the agent feels like it lacks documentation for a package. Given a package name and context that package will be used in, returns the best documentation for that package. Caches docs locally for future requests.",
 		{
 			parameters: z.object({
-				package_name: z.string().describe("The npm package or tool name to get docs for"),
+				package_name: z.string().describe("The npm package or tool name to get docs for. (Format of package_name: ecosystem-packageName-version)"),
 				context: z.string().optional().describe("How the tool/package will be used (to return the most relevant docs)")
 			})
 		},
 		async ({ parameters }) => {
+			const apiKey = await getKey();
+			if (!apiKey) {
+				return {
+					content: [{ type: 'text', text: 'VulnZap API key not configured. Please set VULNZAP_API_KEY environment variable or run vulnzap setup to configure your API key.' }]
+				};
+			}
+
 			const { package_name, context } = parameters;
 			// Check cache first
 			const cachedDocs = cacheService.readDocsCache(package_name);
@@ -442,20 +445,25 @@ function setupVulnerabilityResource(server: McpServer): void {
 					content: [{ type: 'text', text: `[CACHED] Docs for ${package_name}${context ? ` (context: ${context})` : ''}:\n${cachedDocs}` }]
 				};
 			}
-			// TODO: Replace with real logic or API call
-			const docsLinks: Record<string, string> = {
-				'@apollo/server': 'https://www.apollographql.com/docs/apollo-server/',
-				'react': 'https://react.dev/learn',
-				'redux': 'https://redux.js.org/introduction/getting-started',
-				'mongodb': 'https://www.mongodb.com/docs/',
-				'mongoose': 'https://mongoosejs.com/docs/guide.html'
-			};
-			const url = docsLinks[package_name] || `https://www.npmjs.com/package/${package_name}`;
-			const docsText = `Docs for ${package_name}${context ? ` (context: ${context})` : ''}: ${url}`;
+			const response = await apiRequest(
+				`${config.api.baseUrl}${config.api.addOn}${config.api.docs.base}`,
+				'POST',
+				{ package_name, context },
+				{ "x-api-key": apiKey }
+			);
+
+			if (response.error) {
+				return {
+					content: [{ type: 'text', text: `Error getting docs: ${response.error}` }]
+				};
+			}
+
+			const data = response.llm_response;
+
 			// Store in cache
-			cacheService.writeDocsCache(package_name, docsText);
+			cacheService.writeDocsCache(package_name, data);
 			return {
-				content: [{ type: 'text', text: docsText }]
+				content: [{ type: 'text', text: `${JSON.stringify(data, null, 2)}` }]
 			};
 		}
 	);

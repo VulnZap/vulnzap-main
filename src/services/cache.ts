@@ -20,8 +20,11 @@ export interface CacheService {
   readCache(packageName: string, packageVersion: string, ecosystem: string): any | null;
   writeCache(packageName: string, packageVersion: string, ecosystem: string, data: any): void;
   getDocsCacheFilePath(packageName: string): string;
-  readDocsCache(packageName: string): string | null;
-  writeDocsCache(packageName: string, docs: string): void;
+  readDocsCache(packageName: string): any | null;
+  writeDocsCache(packageName: string, docs: any): void;
+  getLatestToolsetCacheFilePath(user_prompt: string, user_tools: string[], agent_tools: string[]): string;
+  readLatestToolsetCache(user_prompt: string, user_tools: string[], agent_tools: string[]): any | null;
+  writeLatestToolsetCache(user_prompt: string, user_tools: string[], agent_tools: string[], data: any): void;
 }
 
 class VulnZapCacheService implements CacheService {
@@ -31,8 +34,15 @@ class VulnZapCacheService implements CacheService {
     }
   }
 
+  // Utility to sanitize package names for file paths
+  private sanitizePackageName(packageName: string): string {
+    // Replace @, /, and any non-alphanumeric character with '-'
+    return packageName.replace(/[^a-zA-Z0-9.-]/g, '-');
+  }
+
   getCacheFilePath(packageName: string, packageVersion: string, ecosystem: string): string {
-    return path.join(CACHE_DIR, `${ecosystem}-${packageName}-${packageVersion}.json`);
+    const safePackageName = this.sanitizePackageName(packageName);
+    return path.join(CACHE_DIR, `${ecosystem}-${safePackageName}-${packageVersion}.json`);
   }
 
   isCacheStale(cacheFile: string): boolean {
@@ -64,24 +74,60 @@ class VulnZapCacheService implements CacheService {
   }
 
   getDocsCacheFilePath(packageName: string): string {
-    return path.join(CACHE_DIR, `${packageName}.docs.txt`);
+    const safePackageName = this.sanitizePackageName(packageName);
+    return path.join(CACHE_DIR, `${safePackageName}.docs.json`);
   }
 
-  readDocsCache(packageName: string): string | null {
+  readDocsCache(packageName: string): any | null {
     this.ensureCacheDir();
     const cacheFile = this.getDocsCacheFilePath(packageName);
     if (!fs.existsSync(cacheFile)) return null;
     try {
-      return fs.readFileSync(cacheFile, 'utf8');
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
     } catch {
       return null;
     }
   }
 
-  writeDocsCache(packageName: string, docs: string): void {
+  writeDocsCache(packageName: string, docs: any): void {
     this.ensureCacheDir();
     const cacheFile = this.getDocsCacheFilePath(packageName);
-    fs.writeFileSync(cacheFile, docs, 'utf8');
+    fs.writeFileSync(cacheFile, JSON.stringify(docs, null, 2), 'utf8');
+  }
+
+  // Utility to create a cache key for latest_toolset
+  private getLatestToolsetCacheKey(user_prompt: string, user_tools: string[], agent_tools: string[]): string {
+    // Create a unique key based on the prompt and tools
+    const base = `${user_prompt}__${user_tools.sort().join(',')}__${agent_tools.sort().join(',')}`;
+    // Sanitize and hash (simple hash for now)
+    let hash = 0;
+    for (let i = 0; i < base.length; i++) {
+      hash = ((hash << 5) - hash) + base.charCodeAt(i);
+      hash |= 0;
+    }
+    return `latest-toolset-${Math.abs(hash)}.json`;
+  }
+
+  getLatestToolsetCacheFilePath(user_prompt: string, user_tools: string[], agent_tools: string[]): string {
+    const fileName = this.getLatestToolsetCacheKey(user_prompt, user_tools, agent_tools);
+    return path.join(CACHE_DIR, fileName);
+  }
+
+  readLatestToolsetCache(user_prompt: string, user_tools: string[], agent_tools: string[]): any | null {
+    this.ensureCacheDir();
+    const cacheFile = this.getLatestToolsetCacheFilePath(user_prompt, user_tools, agent_tools);
+    if (this.isCacheStale(cacheFile)) return null;
+    try {
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    } catch {
+      return null;
+    }
+  }
+
+  writeLatestToolsetCache(user_prompt: string, user_tools: string[], agent_tools: string[], data: any): void {
+    this.ensureCacheDir();
+    const cacheFile = this.getLatestToolsetCacheFilePath(user_prompt, user_tools, agent_tools);
+    fs.writeFileSync(cacheFile, JSON.stringify(data, null, 2), 'utf8');
   }
 }
 
