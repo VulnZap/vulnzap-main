@@ -19,7 +19,7 @@ export async function runWithBackoff<T>(fn: () => Promise<T>, maxRetries = 5, in
       const isRetryable =
         (error.response && (error.response.status === 500 || error.response.status === 503));
       if (!isRetryable || attempt > maxRetries) {
-        throw error;
+        throw error.response.error;
       }
       await new Promise(res => setTimeout(res, delay));
       delay *= 2; // Exponential backoff

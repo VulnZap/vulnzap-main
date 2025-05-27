@@ -50,9 +50,10 @@ export const config = {
 
   // API endpoints
   api: {
-    // baseUrl: 'http://localhost:4000',
-    baseUrl: 'https://vulnzap-server.vercel.app',
+    baseUrl: 'http://localhost:4000',
+    // baseUrl: 'https://vulnzap-server.vercel.app',
     addOn: '/api/v1',
+    enhanced: '/api/v2',
     vulnerability: {
       check: '/vulnzap/scan',
       batch: '/vulnzap/batch-scan'
@@ -63,13 +64,13 @@ export const config = {
       usage: '/account/usage',
     },
     docs: {
-      base: '/docs/get-docs',
+      base: '/enhanced-get-docs',
     },
     tools: {
-      base: '/docs/latest-toolset',
+      base: '/enhanced-latest-toolset',
     },
     ai: {
-      base: '/ai/amplify-feature-prompt',
+      base: '/enhanced-amplify-prompt',
     }
   },
 };
