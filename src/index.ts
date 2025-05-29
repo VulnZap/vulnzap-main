@@ -28,21 +28,6 @@ import { apiRequest } from './utils/apiClient.js';
 // Load environment variables
 dotenv.config();
 
-// Get __dirname equivalent in ESM
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-/**
- * Configuration for the VulnZap MCP server
- */
-export interface VulnZapConfig {
-	useMcp?: boolean;
-	ide?: string;
-	port?: number;
-	apiKey?: string;
-	serverIsDown?: boolean;
-}
-
 export interface ApiResponse {
 	message: string,
 	status: number,
@@ -64,22 +49,9 @@ async function checkLocalVulnerability(ecosystem: string, packageName: string, v
 /**
  * Start the VulnZap MCP server
  * 
- * @param config - Configuration options for the server
  * @returns Promise<void>
  */
-export async function startMcpServer(config: VulnZapConfig): Promise<void> {
-	// Default configuration
-	const serverConfig = {
-		useMcp: config.useMcp ?? true,
-		ide: config.ide ?? 'cursor',
-		port: config.port ?? 3456,
-		apiKey: config.apiKey ?? process.env.VULNZAP_API_KEY,
-		serverIsDown: config.serverIsDown ?? false
-	};
-
-	// Loading NVD API key if available
-	const nvdApiKey = process.env.NVD_API_KEY;
-
+export async function startMcpServer(): Promise<void> {
 	// Initialize the MCP server
 	const server = new McpServer({
 		name: "VulnZap",
@@ -122,8 +94,6 @@ export async function startMcpServer(config: VulnZapConfig): Promise<void> {
 
 	// Start the server
 	await server.connect(transport);
-
-	console.log("VulnZap MCP server started");
 }
 
 /**

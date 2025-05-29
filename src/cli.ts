@@ -223,7 +223,6 @@ program
     }
   });
 
-
 // Command: vulnzap secure (only used by ides to start a connection to the server)
 program
   .command('secure')
@@ -252,12 +251,7 @@ program
         console.error(chalk.red('Error: VulnZap Api key not defined, user is require to run `vulnzap setup -k <key>` to setup the api key.'));
         process.exit(1);
       }
-      await startMcpServer({
-        useMcp: options.mcp || true,
-        ide: options.ide || 'cursor',
-        port: parseInt(options.port, 10),
-        serverIsDown: serverIsDown
-      });
+      await startMcpServer();
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
@@ -286,42 +280,80 @@ program
 program
   .command('check <package>')
   .description('Check a package for vulnerabilities (format: npm:package-name@version)')
-  .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip)', 'npm')
+  .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip, go, rust, etc.)')
   .option('-v, --version <version>', 'Package version')
-  .option('-C, --cache', 'Use cached results')
-  .option('-A, --ai', 'Use AI to get the summary of the vulnerabilities')
   .action(async (packageInput, options) => {
     displayBanner();
     let packageName, packageVersion, packageEcosystem;
-    // Parse package input
-    const packageFormat = /^(npm|pip):([^@]+)@(.+)$/;
+    
+    // Parse package input with improved logic
+    const packageFormat = /^(npm|pip|go|rust|maven|gradle|composer|nuget|pypi):([^@]+)@(.+)$/;
     const match = packageInput.match(packageFormat);
+    
     if (match) {
+      // Format: ecosystem:package-name@version (preferred format)
       [, packageEcosystem, packageName, packageVersion] = match;
     } else if (packageInput.includes('@') && !packageInput.startsWith('@')) {
       // Fallback for old format package@version
-      [packageName, packageVersion] = packageInput.split('@');
-      packageEcosystem = options.ecosystem;
+      const parts = packageInput.split('@');
+      if (parts.length === 2) {
+        [packageName, packageVersion] = parts;
+        packageEcosystem = options.ecosystem;
+      } else {
+        packageName = packageInput;
+        packageVersion = options.version;
+        packageEcosystem = options.ecosystem;
+      }
     } else {
+      // No @ symbol, use package name as-is
       packageName = packageInput;
       packageVersion = options.version;
       packageEcosystem = options.ecosystem;
     }
-    if (!packageVersion) {
-      console.error(chalk.red('Error: Package version is required'));
-      console.log('Format: vulnzap check ecosystem:package-name@version');
-      console.log('Example: vulnzap check npm:express@4.17.1');
-      console.log('Or: vulnzap check package-name --ecosystem npm --version 4.17.1');
+
+    // Validate that we have all required components
+    const missingComponents = [];
+    
+    if (!packageName || packageName.trim() === '') {
+      missingComponents.push('package name');
+    }
+    
+    if (!packageVersion || packageVersion.trim() === '') {
+      missingComponents.push('package version');
+    }
+    
+    if (!packageEcosystem || packageEcosystem.trim() === '') {
+      missingComponents.push('package ecosystem');
+    }
+
+    // If any components are missing, show specific error messages
+    if (missingComponents.length > 0) {
+      console.error(chalk.red(`Error: Missing required ${missingComponents.join(', ')}`));
+      console.log('');
+      console.log(chalk.cyan('Supported formats:'));
+      console.log('  1. ecosystem:package-name@version (recommended)');
+      console.log('     Example: vulnzap check npm:express@4.17.1');
+      console.log('');
+      console.log('  2. package-name@version with --ecosystem flag');
+      console.log('     Example: vulnzap check express@4.17.1 --ecosystem npm');
+      console.log('');
+      console.log('  3. package-name with --ecosystem and --version flags');
+      console.log('     Example: vulnzap check express --ecosystem npm --version 4.17.1');
+      console.log('');
+      console.log(chalk.yellow('Supported ecosystems: npm, pip, go, rust, maven, gradle, composer, nuget, pypi'));
       process.exit(1);
     }
-    if (!packageEcosystem) {
-      console.error(chalk.red('Error: Package ecosystem is required'));
-      console.log('Format: vulnzap check ecosystem:package-name@version');
-      console.log('Example: vulnzap check npm:express@4.17.1');
-      console.log('Or: vulnzap check package-name --ecosystem npm --version 4.17.1');
+
+    // Validate ecosystem
+    const supportedEcosystems = ['npm', 'pip', 'go', 'rust', 'maven', 'gradle', 'composer', 'nuget', 'pypi'];
+    if (!supportedEcosystems.includes(packageEcosystem.toLowerCase())) {
+      console.error(chalk.red(`Error: Unsupported ecosystem '${packageEcosystem}'`));
+      console.log(chalk.yellow(`Supported ecosystems: ${supportedEcosystems.join(', ')}`));
       process.exit(1);
     }
+
     const spinner = ora(`Checking ${packageEcosystem}:${packageName}@${packageVersion} for vulnerabilities...\n`).start();
+
     try {
       await checkHealth();
       const result = await checkVulnerability(packageEcosystem, packageName, packageVersion, {
@@ -544,6 +576,7 @@ program
 //   });
 
 // Command: vulnzap connect
+
 program
   .command('connect')
   .description('Connect VulnZap to your AI-powered IDE')

@@ -28,30 +28,13 @@ export const config = {
 
   // Server config
   server: {
-    port: parseInt(process.env.PORT || '3456', 10),
-    host: process.env.HOST || 'localhost',
+    port: parseInt('3456', 10),
+    host: 'localhost',
   },
-
-  // Stripe config
-  stripe: {
-    publicKey: process.env.STRIPE_PUBLIC_KEY || '',
-    secretKey: process.env.STRIPE_SECRET_KEY || '',
-    webhookSecret: process.env.STRIPE_WEBHOOK_SECRET || '',
-    prices: {
-      free: 'price_free',
-      pro: process.env.STRIPE_PRICE_PRO || 'price_pro',
-      enterprise: process.env.STRIPE_PRICE_ENTERPRISE || 'price_enterprise',
-    },
-    products: {
-      pro: process.env.STRIPE_PRODUCT_PRO || 'prod_pro',
-      enterprise: process.env.STRIPE_PRODUCT_ENTERPRISE || 'prod_enterprise',
-    },
-  },
-
+  
   // API endpoints
   api: {
-    baseUrl: 'http://localhost:4000',
-    // baseUrl: 'https://vulnzap-server.vercel.app',
+    baseUrl: 'https://vulnzap-server.vercel.app',
     addOn: '/api/v1',
     enhanced: '/api/v2',
     vulnerability: {

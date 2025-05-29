@@ -14,16 +14,6 @@ jspm_packages/
 # Output of 'npm pack'
 *.tgz
 
-# dotenv environment variables file
-.env
-.env.test
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-.env.development
-.env.production
-
 # Logs
 logs
 *.log
