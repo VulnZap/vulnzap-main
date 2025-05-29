@@ -603,52 +603,6 @@ program
     const logStream = fs.createWriteStream(logFile, { flags: 'a' });
     logStream.write(`VulnZap connect command executed for ${options.ide} at ${new Date().toISOString()}\n`);
     logStream.end();
-    
-    // Display info about API keys and ask if user has both
-    console.log(chalk.cyan('To use the connect command, you need both a GitHub token and an NVD API key.'));
-    console.log(chalk.yellow('GitHub token: https://github.com/settings/tokens'));
-    console.log(chalk.yellow('NVD API key: https://nvd.nist.gov/developers/request-an-api-key'));
-    console.log('\nBoth keys are required for full functionality.');
-    const { hasKeys } = await inquirer.prompt([
-      {
-        type: 'confirm',
-        name: 'hasKeys',
-        message: 'Do you have both the GitHub token and NVD API key?',
-        default: false,
-      },
-    ]);
-    if (!hasKeys) {
-      console.log(chalk.red('Please obtain both API keys before proceeding.'));
-      process.exit(1);
-    }
-
-    // Prompt for GitHub and NVD API keys
-    const answers = await inquirer.prompt([
-      {
-        type: 'input',
-        name: 'githubToken',
-        message: 'Enter your GitHub token:',
-      },
-      {
-        type: 'input',
-        name: 'nvdApiKey',
-        message: 'Enter your NVD API key:',
-      },
-    ]);
-
-    let missing = false;
-    if (!answers.githubToken) {
-      console.log(chalk.yellow('You can generate a GitHub token at: https://github.com/settings/tokens'));
-      missing = true;
-    }
-    if (!answers.nvdApiKey) {
-      console.log(chalk.yellow('You can request an NVD API key at: https://nvd.nist.gov/developers/request-an-api-key'));
-      missing = true;
-    }
-    if (missing) {
-      console.error(chalk.red('Error: Both API keys are required to proceed.'));
-      process.exit(1);
-    }
 
     if (options.ide === 'cursor') {
       const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
@@ -664,21 +618,13 @@ program
         cursorMcpConfig.mcpServers = {
           VulnZap: {
             command: "vulnzap",
-            args: ["secure", "--ide", "cursor", "--port", "3456"],
-            env: {
-              VULNZAP_GITHUB_TOKEN: answers.githubToken,
-              VULNZAP_NVD_API_KEY: answers.nvdApiKey
-            }
+            args: ["secure", "--ide", "cursor", "--port", "3456"]
           }
         };
       } else {
         cursorMcpConfig.mcpServers.VulnZap = {
           command: "vulnzap",
-          args: ["secure", "--ide", "cursor", "--port", "3456"],
-          env: {
-            VULNZAP_GITHUB_TOKEN: answers.githubToken,
-            VULNZAP_NVD_API_KEY: answers.nvdApiKey
-          }
+          args: ["secure", "--ide", "cursor", "--port", "3456"]
         };
       }
       fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
@@ -722,11 +668,7 @@ program
       }
       windsurfMcpConfig.mcpServers.VulnZap = {
         command: 'vulnzap',
-        args: ['secure', '--ide', 'windsurf', '--port', '3456'],
-        env: {
-          VULNZAP_GITHUB_TOKEN: answers.githubToken,
-          VULNZAP_NVD_API_KEY: answers.nvdApiKey,
-        },
+        args: ['secure', '--ide', 'windsurf', '--port', '3456']
       };
       fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
       console.log(chalk.green('✓') + ' Windsurf MCP config updated successfully with API keys');
@@ -773,10 +715,6 @@ program
       clineMcpConfig.mcpServers.VulnZap = {
         command: "vulnzap",
         args: ["secure", "--ide", "cline", "--port", "3456"],
-        env: {
-          VULNZAP_GITHUB_TOKEN: answers.githubToken,
-          VULNZAP_NVD_API_KEY: answers.nvdApiKey
-        },
         alwaysAllow: ["auto-vulnerability-scan"], // Auto-approve vulnerability scanning
         disabled: false,
         networkTimeout: 60000 // 1 minute default timeout
