@@ -507,38 +507,54 @@ function setupVulnerabilityResource(server: McpServer): void {
             ],
           };
         }
+
+        // Log the API call for debugging
+        const endpoint = `${config.api.baseUrl}${config.api.enhanced}${config.api.ai.base}`;
+        console.log(`Making API request to: ${endpoint}`);
+        console.log(`Request parameters:`, JSON.stringify(parameters, null, 2));
+
         const response = await apiRequest(
-          `${config.api.baseUrl}${config.api.enhanced}${config.api.ai.base}`,
+          endpoint,
           "POST",
-          parameters,
+          { parameters }, // Wrap parameters in the expected structure
           { "x-api-key": apiKey }
         );
 
-        if (response.error) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Error amplifying prompt: ${response.error}`,
-              },
-            ],
-          };
-        }
+        console.log(`API response:`, JSON.stringify(response, null, 2));
 
-        if (response.data) {
+        // Handle successful response
+        if (
+          response &&
+          (response.data ||
+            response.success ||
+            (!response.error && Object.keys(response).length > 0))
+        ) {
+          const responseData = response.data || response;
           cacheService.writeDocsCache(
             `amplify-${parameters.user_prompt}`,
-            response.data
+            responseData
           );
           return {
             content: [
               {
                 type: "text",
                 text: `Amplified prompt and rules generated. Please save the following rules in your agent/IDE's rules file for future compliance:\n\n${JSON.stringify(
-                  response.data,
+                  responseData,
                   null,
                   2
                 )}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`,
+              },
+            ],
+          };
+        }
+
+        // Handle error response
+        if (response && response.error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error amplifying prompt: ${response.error}`,
               },
             ],
           };
@@ -553,9 +569,15 @@ function setupVulnerabilityResource(server: McpServer): void {
           ],
         };
       } catch (error: any) {
+        console.error("Error in amplify-feature-prompt:", error);
         return {
           content: [
-            { type: "text", text: `Error amplifying prompt: ${error.message}` },
+            {
+              type: "text",
+              text: `Error amplifying prompt: ${
+                error.message || error.toString()
+              }`,
+            },
           ],
         };
       }
@@ -623,30 +645,38 @@ function setupVulnerabilityResource(server: McpServer): void {
         const response = await apiRequest(
           `${config.api.baseUrl}${config.api.enhanced}${config.api.docs.base}`,
           "POST",
-          parameters,
+          { parameters },
           { "x-api-key": apiKey }
         );
 
-        if (response.error) {
-          return {
-            content: [
-              { type: "text", text: `Error getting docs: ${response.error}` },
-            ],
-          };
-        }
-
-        if (response.data) {
-          cacheService.writeDocsCache(parameters.package_name, response.data);
+        // Handle successful response
+        if (
+          response &&
+          (response.data ||
+            response.success ||
+            (!response.error && Object.keys(response).length > 0))
+        ) {
+          const responseData = response.data || response;
+          cacheService.writeDocsCache(parameters.package_name, responseData);
           return {
             content: [
               {
                 type: "text",
                 text: `Documentation generated. Please save the following documentation/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(
-                  response.data,
+                  responseData,
                   null,
                   2
                 )}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`,
               },
+            ],
+          };
+        }
+
+        // Handle error response
+        if (response && response.error) {
+          return {
+            content: [
+              { type: "text", text: `Error getting docs: ${response.error}` },
             ],
           };
         }
@@ -738,37 +768,45 @@ function setupVulnerabilityResource(server: McpServer): void {
         const response = await apiRequest(
           `${config.api.baseUrl}${config.api.enhanced}${config.api.tools.base}`,
           "POST",
-          parameters,
+          { parameters },
           { "x-api-key": apiKey }
         );
 
-        if (response.error) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Error getting toolset: ${response.error}`,
-              },
-            ],
-          };
-        }
-
-        if (response.data) {
+        // Handle successful response
+        if (
+          response &&
+          (response.data ||
+            response.success ||
+            (!response.error && Object.keys(response).length > 0))
+        ) {
+          const responseData = response.data || response;
           cacheService.writeLatestToolsetCache(
             parameters.user_prompt,
             parameters.user_tools || [],
             parameters.agent_tools || [],
-            response.data
+            responseData
           );
           return {
             content: [
               {
                 type: "text",
                 text: `Toolset generated. Please save the following toolset/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(
-                  response.data,
+                  responseData,
                   null,
                   2
                 )}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`,
+              },
+            ],
+          };
+        }
+
+        // Handle error response
+        if (response && response.error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Error getting toolset: ${response.error}`,
               },
             ],
           };

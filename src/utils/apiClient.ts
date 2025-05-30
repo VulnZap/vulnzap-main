@@ -1,4 +1,4 @@
-import axios, { AxiosRequestConfig, Method } from 'axios';
+import axios, { AxiosRequestConfig, Method } from "axios";
 
 /**
  * Runs an async function with exponential backoff on failure (e.g., 500 errors, network errors).
@@ -7,7 +7,11 @@ import axios, { AxiosRequestConfig, Method } from 'axios';
  * @param initialDelay Initial delay in ms (default 500)
  * @returns The result of the function if successful
  */
-export async function runWithBackoff<T>(fn: () => Promise<T>, maxRetries = 5, initialDelay = 500): Promise<T> {
+export async function runWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries = 5,
+  initialDelay = 500
+): Promise<T> {
   let attempt = 0;
   let delay = initialDelay;
   while (true) {
@@ -17,11 +21,18 @@ export async function runWithBackoff<T>(fn: () => Promise<T>, maxRetries = 5, in
       attempt++;
       // Only retry on 500 or 503 errors
       const isRetryable =
-        (error.response && (error.response.status === 500 || error.response.status === 503));
+        error.response &&
+        (error.response.status === 500 || error.response.status === 503);
       if (!isRetryable || attempt > maxRetries) {
-        throw error.response.error;
+        if (error.response && error.response.data) {
+          throw error.response.data;
+        } else if (error.response) {
+          throw error.response;
+        } else {
+          throw error;
+        }
       }
-      await new Promise(res => setTimeout(res, delay));
+      await new Promise((res) => setTimeout(res, delay));
       delay *= 2; // Exponential backoff
     }
   }
@@ -38,7 +49,7 @@ export async function runWithBackoff<T>(fn: () => Promise<T>, maxRetries = 5, in
  */
 export async function apiRequest<T = any>(
   endpoint: string,
-  method: Method = 'POST',
+  method: Method = "POST",
   body?: any,
   headers?: Record<string, string>,
   options?: { maxRetries?: number; initialDelay?: number }
@@ -47,13 +58,30 @@ export async function apiRequest<T = any>(
     url: endpoint,
     method,
     headers: {
-      'Content-Type': 'application/json',
-      ...(headers || {})
+      "Content-Type": "application/json",
+      ...(headers || {}),
     },
     data: body,
   };
-  return runWithBackoff(async () => {
-    const response = await axios(config);
-    return response.data;
-  }, options?.maxRetries, options?.initialDelay);
-} 
+
+  try {
+    return await runWithBackoff(
+      async () => {
+        const response = await axios(config);
+        // Ensure we always return something, even if response.data is undefined
+        return response.data || {};
+      },
+      options?.maxRetries,
+      options?.initialDelay
+    );
+  } catch (error: any) {
+    // Enhanced error handling to provide more context
+    if (error.message) {
+      throw new Error(`API request failed: ${error.message}`);
+    } else if (typeof error === "string") {
+      throw new Error(`API request failed: ${error}`);
+    } else {
+      throw new Error(`API request failed: ${JSON.stringify(error)}`);
+    }
+  }
+}
