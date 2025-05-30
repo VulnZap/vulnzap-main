@@ -33,7 +33,7 @@ const checkHealth = async () => {
   try {
     const data = await api.checkHealth();
     if (data.status === 'ok') {
-      console.log(chalk.green('✓') + ' VulnZap server is healthy');
+      return true;
     } else {
       throw new Error('SERVER_DOWN');
     }
@@ -72,18 +72,20 @@ program
   .command('setup')
   .description('Configure VulnZap with your API key')
   .option('-k, --key <key>', 'Directly provide the API key')
+  .option('--ide <ide-name>', 'Specify IDE integration (cursor, windsurf, cline)')
   .action(async (options) => {
     displayBanner();
     
     try {
-      const { authenticated } = await auth.checkAuth();
-      if (!authenticated) {
-        console.error(chalk.red('Error: You must be logged in to configure VulnZap'));
-        console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
-        process.exit(1);
+      // Check if API key already exists
+      let existingKey;
+      try {
+        existingKey = await getKey();
+      } catch (error) {
+        // API key doesn't exist, which is fine
+        existingKey = null;
       }
 
-      const existingKey = await getKey();
       if (existingKey) {
         const { confirm } = await inquirer.prompt([
           {
@@ -96,6 +98,12 @@ program
 
         if (!confirm) {
           console.log(chalk.yellow('✓') + ' API key configuration cancelled');
+          
+          // If user doesn't want to replace API key but provided --ide flag, still proceed with IDE connection
+          if (options.ide) {
+            console.log(chalk.cyan('\nProceeding with IDE connection...'));
+            await connectIDE(options.ide);
+          }
           return;
         }
       }
@@ -128,100 +136,55 @@ program
 
       await saveKey(apiKey);
       console.log(chalk.green('✓') + ' VulnZap is now configured with your API key');
+
+      // If IDE flag is provided, proceed with IDE connection
+      if (options.ide) {
+        console.log(chalk.cyan('\nConnecting to IDE...'));
+        await connectIDE(options.ide);
+      }
+
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
     }
   });
 
+// Command: vulnzap login (Disabled for now)
+// program
+//   .command('login')
+//   .description('Login to your VulnZap account')
+//   .option('--provider <provider>', 'OAuth provider (google, github)')
+//   .action(async (options) => {
+//     displayBanner();
 
-// Command: vulnzap init
-program
-  .command('init')
-  .description('Initialize VulnZap for your project')
-  .action(async () => {
-    displayBanner();
-    
-    try {
-      const { authenticated } = await auth.checkAuth();
-      if (!authenticated) {
-        console.error(chalk.red('Error: You must be logged in to initialize VulnZap'));
-        console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
-        process.exit(1);
-      }
+//     const spinner = ora('Initializing login...').start();
 
-      const spinner = ora('Initializing VulnZap...\n').start();
+//     try {
+//       const checkExists = await auth.checkAuth();
+//       if (checkExists.authenticated) {
+//         console.log(chalk.green('✓') + ' You are already logged in to VulnZap');
+//         process.exit(0);
+//       }
 
-      const checkAlreadyInitialized = await checkInit();
-      if (checkAlreadyInitialized) {
-        console.log(chalk.green('✓') + ' VulnZap already initialized');
-        process.exit(0);
-      }
+//       console.log(chalk.cyan('The Api key will automatically get saved after you successfully login. (If it exists)\n'));
 
-      try {
-        const vulnzapLocation = process.cwd() + '/.vulnzap';
-        if (!fs.existsSync(vulnzapLocation)) {
-          fs.mkdirSync(vulnzapLocation);
-        }
-        const scanConfigLocation = vulnzapLocation + '/scans.json';
-        if (!fs.existsSync(scanConfigLocation)) {
-          fs.writeFileSync(scanConfigLocation, JSON.stringify({
-            scans: []
-          }, null, 2));
-        }
-        console.log(chalk.green('✓') + ' VulnZap config file created\n');
-        spinner.succeed('wohooooo!');
-        console.log(chalk.yellow('To enable GitHub integration, set the VULNZAP_GITHUB environment variable with your GitHub token'));
-        console.log(chalk.yellow('To enable National Vulnerability Database(NVD) integration, set the VULNZAP_NVD environment variable with your NVD token'));
-        console.log(chalk.green('✓') + ' VulnZap initialized successfully');
-      } catch (error: any) {
-        spinner.fail('Failed to initialize VulnZap');
-        console.error(chalk.red('Error:'), error.message);
-        process.exit(1);
-      }
-    } catch (error: any) {
-      console.error(chalk.red('Error:'), error.message);
-      process.exit(1);
-    }
-  });
+//       const { success, error } = await auth.login("login");
 
-
-// Command: vulnzap login
-program
-  .command('login')
-  .description('Login to your VulnZap account')
-  .option('--provider <provider>', 'OAuth provider (google, github)')
-  .action(async (options) => {
-    displayBanner();
-
-    const spinner = ora('Initializing login...').start();
-
-    try {
-      const checkExists = await auth.checkAuth();
-      if (checkExists.authenticated) {
-        console.log(chalk.green('✓') + ' You are already logged in to VulnZap');
-        process.exit(0);
-      }
-
-      console.log(chalk.cyan('The Api key will automatically get saved after you successfully login. (If it exists)\n'));
-
-      const { success, error } = await auth.login("login");
-
-      if (success) {
-        spinner.succeed(chalk.green('✓') + ' You are now logged in to VulnZap\n');
-      } else {
-        spinner.fail('Login failed');
-        if (error) {
-          console.error(chalk.red('Error:'), error);
-        }
-        process.exit(1);
-      }
-    } catch (error: any) {
-      spinner.fail('Login failed');
-      console.error(chalk.red('Error:'), error.message);
-      process.exit(1);
-    }
-  });
+//       if (success) {
+//         spinner.succeed(chalk.green('✓') + ' You are now logged in to VulnZap\n');
+//       } else {
+//         spinner.fail('Login failed');
+//         if (error) {
+//           console.error(chalk.red('Error:'), error);
+//         }
+//         process.exit(1);
+//       }
+//     } catch (error: any) {
+//       spinner.fail('Login failed');
+//       console.error(chalk.red('Error:'), error.message);
+//       process.exit(1);
+//     }
+//   });
 
 // Command: vulnzap secure (only used by ides to start a connection to the server)
 program
@@ -232,13 +195,6 @@ program
   .option('--api-key <key>', 'Premium API key for enhanced features')
   .action(async (options) => {
     try {
-      const { authenticated } = await auth.checkAuth();
-      if (!authenticated) {
-        console.error(chalk.red('Error: You must be logged in to use VulnZap secure'));
-        console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
-        process.exit(1);
-      }
-
       let serverIsDown = false;
       try {
         await checkHealth();
@@ -267,8 +223,8 @@ program
 
     try {
       await checkHealth();
-      spinner.succeed('')
-      process.exit(1);
+      spinner.succeed(chalk.green('✓') + ' VulnZap server is healthy');
+      process.exit(0);
     } catch (error: any) {
       spinner.fail('Failed to check server status');
       console.error(chalk.red('Error:'), "VulnZap server is down. Local cache will be used if available.");
@@ -420,6 +376,8 @@ program
           console.log(`Upgrade to ${result.fixedVersions[0]} or later\n`);
         }
       }
+      spinner.succeed('Vulnerability check completed');
+      process.exit(0);
     } catch (error: any) {
       if (error.message === 'SERVER_DOWN') {
         spinner.stop();
@@ -492,91 +450,6 @@ program
     }
   });
 
-// Unavailable feature for now (will be added in future updates)
-// program
-//   .command('sbom')
-//   .description('Scan the current directory for SBOM (Software Bill of Materials)')
-//   .option('--ecosystem <ecosystem>', 'Specific ecosystem to scan (npm, pip, go, rust)')
-//   .option('--output <file>', 'Output file for SBOM results (JSON format)')
-//   .action(async (options) => {
-//     displayBanner();
-//     try {
-//       const { authenticated } = await auth.checkAuth();
-//       if (!authenticated) {
-//         console.error(chalk.red('Error: You must be logged in to scan for SBOM'));
-//         console.log(`Run ${chalk.cyan('vulnzap login')} to authenticate first`);
-//         process.exit(1);
-//       }
-
-//       const checkAlreadyInitialized = await checkInit();
-//       if (!checkAlreadyInitialized) {
-//         console.error(chalk.red('Error: VulnZap is not initialized in this project, run vulnzap init to initialize VulnZap'));
-//         process.exit(1);
-//       }
-
-//       const spinner = ora('Scanning for SBOM...').start();
-
-//       // Check if cyclonedx-bom is installed
-//       try {
-//         execSync('cdxgen --version', { stdio: 'ignore' });
-//       } catch {
-//         console.log(chalk.yellow('CycloneDX CLI not found. Installing globally...'));
-//         try {
-//           execSync('npm install -g @cyclonedx/cdxgen', { stdio: 'inherit' });
-//         } catch (error: any) {
-//           console.error(chalk.red('Error installing CycloneDX CLI (you can install it manually using `npm install -g @cyclonedx/cdxgen`):'), error.message);
-//           process.exit(1);
-//         }
-//       }
-
-//       // Run CycloneDX to generate SBOM
-//       try {
-//         const sbomFile = path.join(process.cwd(), options.output || 'sbom.json');
-//         execSync(`cdxgen -o ${sbomFile}`, { stdio: 'inherit' });
-//         console.log(chalk.green('✓') + ` SBOM generated at ${sbomFile}`);
-
-//         // Read and parse the SBOM file
-//         const sbomData = JSON.parse(fs.readFileSync(sbomFile, 'utf8'));
-//         const packages = sbomData.components.map((component: any) => ({
-//           packageName: component.name,
-//           version: component.version,
-//           ecosystem: component.type || 'unknown',
-//         }));
-
-//         spinner.succeed('SBOM scan completed');
-//         console.log(chalk.green('✓') + ' SBOM scan completed successfully');
-//         console.log(chalk.green('✓') + ` Found ${packages.length} packages in the SBOM`);
-//         console.log(chalk.green('✓') + ' Packages:');
-//         packages.forEach((pkg: any) => {
-//           console.log(`- ${pkg.packageName}@${pkg.version} (${pkg.ecosystem})`);
-//         });
-//         console.log(chalk.green('✓') + ' SBOM results saved to ' + sbomFile);
-//         console.log(chalk.green('✓') + ' Sending SBOM results to VulnZap server...');
-//         const sbomResults = {
-//           id: uuidv4(),
-//           packages: packages,
-//           createdAt: new Date().toISOString(),
-//         };
-//         const response = await api.sendSbomResults(sbomResults);
-//         if (response.status === 'success') {
-//           console.log(chalk.green('✓') + ' SBOM results sent successfully');
-//           console.log(chalk.green('✓') + ` The scan is added to the queue and you can view the results on this url: ${config.api.baseUrl}/dashboard/scans/${response.traceId}`);
-//         } else {
-//           console.log(chalk.red('Error: Failed to send SBOM results to VulnZap server'));
-//         }
-//         process.exit(0);
-//       } catch (error: any) {
-//         console.error(chalk.red('Error generating SBOM:'), error.message);
-//         process.exit(1);
-//       }
-//     } catch (error) {
-//       console.log(error)
-//       process.exit(1)
-//     }
-//   });
-
-// Command: vulnzap connect
-
 program
   .command('connect')
   .description('Connect VulnZap to your AI-powered IDE')
@@ -598,174 +471,8 @@ program
       options.ide = ide;
     }
 
-    // Log the event
-    const logFile = join(os.homedir(), '.vulnzap', 'info.log');
-    const logStream = fs.createWriteStream(logFile, { flags: 'a' });
-    logStream.write(`VulnZap connect command executed for ${options.ide} at ${new Date().toISOString()}\n`);
-    logStream.end();
-
-    if (options.ide === 'cursor') {
-      const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
-      if (!fs.existsSync(cursorMcpConfigLocation)) {
-        console.error(chalk.red('Error: Cursor MCP config not found.'));
-        console.log('Please install Cursor and try again.');
-        process.exit(1);
-      }
-      const cursorMcpConfig = JSON.parse(fs.readFileSync(cursorMcpConfigLocation, 'utf8'));
-
-      // Save tokens in mcp.json
-      if (!cursorMcpConfig.mcp) {
-        cursorMcpConfig.mcpServers = {
-          VulnZap: {
-            command: "vulnzap",
-            args: ["secure", "--ide", "cursor", "--port", "3456"]
-          }
-        };
-      } else {
-        cursorMcpConfig.mcpServers.VulnZap = {
-          command: "vulnzap",
-          args: ["secure", "--ide", "cursor", "--port", "3456"]
-        };
-      }
-      fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
-      console.log(chalk.green('✓') + ' Cursor MCP config updated successfully with API keys');
-
-      // Display helpful information
-      console.log('\nConfiguration Summary:');
-      console.log('- MCP Server Name: VulnZap');
-      console.log('- Transport Type: STDIO');
-      console.log('- Auto-approved Tools: auto-vulnerability-scan');
-      console.log('- Network Timeout: 60 seconds');
-      console.log('\nTo manage this server in Cursor:');
-      console.log('1. Click the "MCP Servers" icon in Cursor');
-      console.log('2. Find "VulnZap" in the server list');
-      console.log('3. Use the toggle switch to enable/disable');
-      console.log('4. Click on server name to access additional settings');
-      
-      process.exit(0);
-    } else if (options.ide === 'windsurf') {
-      // Windsurf MCP config location and structure
-      const windsurfDir = path.join(os.homedir(), '.codeium', 'windsurf');
-      const windsurfMcpConfigLocation = path.join(windsurfDir, 'mcp_config.json');
-      // Ensure parent directory exists
-      if (!fs.existsSync(windsurfDir)) {
-        fs.mkdirSync(windsurfDir, { recursive: true });
-      }
-      let windsurfMcpConfig: any = {};
-      if (fs.existsSync(windsurfMcpConfigLocation)) {
-        try {
-          windsurfMcpConfig = JSON.parse(fs.readFileSync(windsurfMcpConfigLocation, 'utf8'));
-        } catch (e) {
-          console.error(chalk.red('Error: Failed to parse existing Windsurf MCP config.'));
-          process.exit(1);
-        }
-      } else {
-        // If file does not exist, create with empty structure
-        windsurfMcpConfig = { mcpServers: {} };
-      }
-      if (!windsurfMcpConfig.mcpServers) {
-        windsurfMcpConfig.mcpServers = {};
-      }
-      windsurfMcpConfig.mcpServers.VulnZap = {
-        command: 'vulnzap',
-        args: ['secure', '--ide', 'windsurf', '--port', '3456']
-      };
-      fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
-      console.log(chalk.green('✓') + ' Windsurf MCP config updated successfully with API keys');
-      
-      // Display helpful information
-      console.log('\nConfiguration Summary:');
-      console.log('- MCP Server Name: VulnZap');
-      console.log('- Transport Type: STDIO');
-      console.log('- Auto-approved Tools: auto-vulnerability-scan');
-      console.log('- Network Timeout: 60 seconds');
-      console.log('\nTo manage this server in Windsurf:');
-      console.log('1. Click the "MCP Servers" icon in Windsurf');
-      console.log('2. Find "VulnZap" in the server list');
-      console.log('3. Use the toggle switch to enable/disable');
-      console.log('4. Click on server name to access additional settings');
-      
-      process.exit(0);
-    } else if (options.ide === 'cline') {
-      // Cline MCP config location and structure
-      const clineDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings');
-      const clineMcpConfigLocation = path.join(clineDir, 'cline_mcp_settings.json');
-      
-      // Ensure parent directory exists
-      if (!fs.existsSync(clineDir)) {
-        fs.mkdirSync(clineDir, { recursive: true });
-      }
-
-      let clineMcpConfig: any = {};
-      if (fs.existsSync(clineMcpConfigLocation)) {
-        try {
-          clineMcpConfig = JSON.parse(fs.readFileSync(clineMcpConfigLocation, 'utf8'));
-        } catch (e) {
-          console.error(chalk.red('Error: Failed to parse existing Cline MCP config.'));
-          process.exit(1);
-        }
-      }
-
-      // Initialize mcpServers if it doesn't exist
-      if (!clineMcpConfig.mcpServers) {
-        clineMcpConfig.mcpServers = {};
-      }
-
-      // Configure VulnZap MCP server with STDIO transport
-      clineMcpConfig.mcpServers.VulnZap = {
-        command: "vulnzap",
-        args: ["secure", "--ide", "cline", "--port", "3456"],
-        alwaysAllow: ["auto-vulnerability-scan"], // Auto-approve vulnerability scanning
-        disabled: false,
-        networkTimeout: 60000 // 1 minute default timeout
-      };
-
-      fs.writeFileSync(clineMcpConfigLocation, JSON.stringify(clineMcpConfig, null, 2));
-      console.log(chalk.green('✓') + ' Cline MCP config updated successfully with API keys');
-      
-      // Display helpful information
-      console.log('\nConfiguration Summary:');
-      console.log('- MCP Server Name: VulnZap');
-      console.log('- Transport Type: STDIO');
-      console.log('- Auto-approved Tools: auto-vulnerability-scan');
-      console.log('- Network Timeout: 60 seconds');
-      console.log('\nTo manage this server in Cline:');
-      console.log('1. Click the "MCP Servers" icon in Cline');
-      console.log('2. Find "VulnZap" in the server list');
-      console.log('3. Use the toggle switch to enable/disable');
-      console.log('4. Click on server name to access additional settings');
-      
-      process.exit(0);
-    } else {
-      console.error(chalk.red('Error: Unsupported IDE.'));
-      console.log('Please use Cursor or Windsurf for now.');
-      process.exit(1);
-    }
-  });
-
-// Command: vulnzap logout
-program
-  .command('logout')
-  .description('Logout from your VulnZap account')
-  .action(async () => {
-    displayBanner();
-
-    const spinner = ora('Logging out...').start();
-
-    try {
-      const { success } = await auth.logout();
-      if (success) {
-        spinner.succeed('Successfully logged out');
-        console.log(chalk.green('✓') + ' You have been logged out of VulnZap');
-      } else {
-        spinner.fail('Logout failed');
-        process.exit(1);
-      }
-    } catch (error: any) {
-      spinner.fail('Logout failed');
-      console.error(chalk.red('Error:'), error.message);
-      process.exit(1);
-    }
+    await connectIDE(options.ide);
+    process.exit(0);
   });
 
 // Command: vulnzap account
@@ -905,4 +612,147 @@ program.parse(process.argv);
 if (process.argv.length === 2) {
   displayBanner();
   program.help();
+}
+
+// Helper function to handle IDE connection logic
+async function connectIDE(ide: string) {
+  // Log the event
+  const logFile = join(os.homedir(), '.vulnzap', 'info.log');
+  const logStream = fs.createWriteStream(logFile, { flags: 'a' });
+  logStream.write(`VulnZap connect command executed for ${ide} at ${new Date().toISOString()}\n`);
+  logStream.end();
+
+  if (ide === 'cursor') {
+    const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
+    if (!fs.existsSync(cursorMcpConfigLocation)) {
+      console.error(chalk.red('Error: Cursor MCP config not found.'));
+      console.log('Please install Cursor and try again.');
+      return;
+    }
+    const cursorMcpConfig = JSON.parse(fs.readFileSync(cursorMcpConfigLocation, 'utf8'));
+
+    // Save tokens in mcp.json
+    if (!cursorMcpConfig.mcp) {
+      cursorMcpConfig.mcpServers = {
+        VulnZap: {
+          command: "vulnzap",
+          args: ["secure", "--ide", "cursor", "--port", "3456"]
+        }
+      };
+    } else {
+      cursorMcpConfig.mcpServers.VulnZap = {
+        command: "vulnzap",
+        args: ["secure", "--ide", "cursor", "--port", "3456"]
+      };
+    }
+    fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
+    console.log(chalk.green('✓') + ' Cursor MCP config updated successfully with API keys');
+
+    // Display helpful information
+    console.log('\nConfiguration Summary:');
+    console.log('- MCP Server Name: VulnZap');
+    console.log('- Transport Type: STDIO');
+    console.log('- Auto-approved Tools: auto-vulnerability-scan');
+    console.log('- Network Timeout: 60 seconds');
+    console.log('\nTo manage this server in Cursor:');
+    console.log('1. Click the "MCP Servers" icon in Cursor');
+    console.log('2. Find "VulnZap" in the server list');
+    console.log('3. Use the toggle switch to enable/disable');
+    console.log('4. Click on server name to access additional settings');
+    
+  } else if (ide === 'windsurf') {
+    // Windsurf MCP config location and structure
+    const windsurfDir = path.join(os.homedir(), '.codeium', 'windsurf');
+    const windsurfMcpConfigLocation = path.join(windsurfDir, 'mcp_config.json');
+    // Ensure parent directory exists
+    if (!fs.existsSync(windsurfDir)) {
+      fs.mkdirSync(windsurfDir, { recursive: true });
+    }
+    let windsurfMcpConfig: any = {};
+    if (fs.existsSync(windsurfMcpConfigLocation)) {
+      try {
+        windsurfMcpConfig = JSON.parse(fs.readFileSync(windsurfMcpConfigLocation, 'utf8'));
+      } catch (e) {
+        console.error(chalk.red('Error: Failed to parse existing Windsurf MCP config.'));
+        return;
+      }
+    } else {
+      // If file does not exist, create with empty structure
+      windsurfMcpConfig = { mcpServers: {} };
+    }
+    if (!windsurfMcpConfig.mcpServers) {
+      windsurfMcpConfig.mcpServers = {};
+    }
+    windsurfMcpConfig.mcpServers.VulnZap = {
+      command: 'vulnzap',
+      args: ['secure', '--ide', 'windsurf', '--port', '3456']
+    };
+    fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
+    console.log(chalk.green('✓') + ' Windsurf MCP config updated successfully with API keys');
+    
+    // Display helpful information
+    console.log('\nConfiguration Summary:');
+    console.log('- MCP Server Name: VulnZap');
+    console.log('- Transport Type: STDIO');
+    console.log('- Auto-approved Tools: auto-vulnerability-scan');
+    console.log('- Network Timeout: 60 seconds');
+    console.log('\nTo manage this server in Windsurf:');
+    console.log('1. Click the "MCP Servers" icon in Windsurf');
+    console.log('2. Find "VulnZap" in the server list');
+    console.log('3. Use the toggle switch to enable/disable');
+    console.log('4. Click on server name to access additional settings');
+    
+  } else if (ide === 'cline') {
+    // Cline MCP config location and structure
+    const clineDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings');
+    const clineMcpConfigLocation = path.join(clineDir, 'cline_mcp_settings.json');
+    
+    // Ensure parent directory exists
+    if (!fs.existsSync(clineDir)) {
+      fs.mkdirSync(clineDir, { recursive: true });
+    }
+
+    let clineMcpConfig: any = {};
+    if (fs.existsSync(clineMcpConfigLocation)) {
+      try {
+        clineMcpConfig = JSON.parse(fs.readFileSync(clineMcpConfigLocation, 'utf8'));
+      } catch (e) {
+        console.error(chalk.red('Error: Failed to parse existing Cline MCP config.'));
+        return;
+      }
+    }
+
+    // Initialize mcpServers if it doesn't exist
+    if (!clineMcpConfig.mcpServers) {
+      clineMcpConfig.mcpServers = {};
+    }
+
+    // Configure VulnZap MCP server with STDIO transport
+    clineMcpConfig.mcpServers.VulnZap = {
+      command: "vulnzap",
+      args: ["secure", "--ide", "cline", "--port", "3456"],
+      alwaysAllow: ["auto-vulnerability-scan"], // Auto-approve vulnerability scanning
+      disabled: false,
+      networkTimeout: 60000 // 1 minute default timeout
+    };
+
+    fs.writeFileSync(clineMcpConfigLocation, JSON.stringify(clineMcpConfig, null, 2));
+    console.log(chalk.green('✓') + ' Cline MCP config updated successfully with API keys');
+    
+    // Display helpful information
+    console.log('\nConfiguration Summary:');
+    console.log('- MCP Server Name: VulnZap');
+    console.log('- Transport Type: STDIO');
+    console.log('- Auto-approved Tools: auto-vulnerability-scan');
+    console.log('- Network Timeout: 60 seconds');
+    console.log('\nTo manage this server in Cline:');
+    console.log('1. Click the "MCP Servers" icon in Cline');
+    console.log('2. Find "VulnZap" in the server list');
+    console.log('3. Use the toggle switch to enable/disable');
+    console.log('4. Click on server name to access additional settings');
+    
+  } else {
+    console.error(chalk.red('Error: Unsupported IDE.'));
+    console.log('Supported IDEs: cursor, windsurf, cline');
+  }
 } 

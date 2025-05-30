@@ -52,22 +52,18 @@ npm link
 
 ## 🛠️ Quick Start
 
-### 1. Authentication
+### 1. Setup API Key
 ```bash
-# Login to VulnZap
-vulnzap login
+# Configure your API key (get it from https://vulnzap.com/dashboard/api-keys)
+vulnzap setup -k <your-api-key>
 
-# Configure your API key
-vulnzap setup
+# Setup API key with IDE connection in one step
+vulnzap setup -k <your-api-key> --ide cursor
+vulnzap setup -k <your-api-key> --ide windsurf
+vulnzap setup -k <your-api-key> --ide cline
 ```
 
-### 2. Initialize Project
-```bash
-# Initialize VulnZap in your project
-vulnzap init
-```
-
-### 3. Connect to Your IDE
+### 2. Connect to Your IDE (if not done in step 1)
 ```bash
 # Connect to Cursor IDE
 vulnzap connect --ide cursor
@@ -79,21 +75,18 @@ vulnzap connect --ide windsurf
 vulnzap connect --ide cline
 ```
 
-### 4. Start Scanning
+### 3. Start Scanning
 Once connected, VulnZap automatically scans packages when your AI assistant tries to install them.
 
 ## 🔧 CLI Commands
 
-### Authentication & Setup
+### Setup & Configuration
 ```bash
-# Login to VulnZap account
-vulnzap login
-
-# Logout from VulnZap
-vulnzap logout
-
 # Setup API key
-vulnzap setup [-k <api-key>]
+vulnzap setup -k <api-key>
+
+# Setup API key and connect to IDE in one step
+vulnzap setup -k <api-key> --ide <cursor|windsurf|cline>
 
 # Check account information
 vulnzap account
@@ -101,9 +94,6 @@ vulnzap account
 
 ### Project Management
 ```bash
-# Initialize VulnZap in current directory
-vulnzap init
-
 # Check server status
 vulnzap status
 

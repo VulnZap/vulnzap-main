@@ -68,12 +68,12 @@ export async function getKey(): Promise<string> {
     // Else check in config file
     const configPath = path.join(os.homedir(), '.vulnzap', 'config.json');
     if (!fs.existsSync(configPath)) {
-      throw new Error('API key not found. Please run `vulnzap login` or `vulnzap setup` to save the API key to your system.');
+      throw new Error('API key not found. Please run `vulnzap setup -k <your-api-key>` to save the API key to your system.');
     }
 
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (!config.apiKey) {
-      throw new Error('API key not found in config. Please run `vulnzap login` or `vulnzap setup` to save the API key to your system.');
+      throw new Error('API key not found in config. Please run `vulnzap setup -k <your-api-key>` to save the API key to your system.');
     }
 
     return config.apiKey;

@@ -571,16 +571,16 @@ export async function checkVulnerability(
 			};
 		}
 
-		const {
-			success
-		} = await checkAuth();
+		// const {
+		// 	success
+		// } = await checkAuth();
 
-		if (!success) {
-			return {
-				message: "User not authenticated",
-				data: null
-			}
-		}
+		// if (!success) {
+		// 	return {
+		// 		message: "User not authenticated",
+		// 		data: null
+		// 	}
+		// }
 
 		// Fetch vulnerabilities from the API using apiRequest
 		const response = await apiRequest(
@@ -755,14 +755,14 @@ export async function checkBatch(
 			};
 		}
 
-		const { success } = await checkAuth();
+		// const { success } = await checkAuth();
 
-		if (!success) {
-			return {
-				message: "User not authenticated",
-				data: null
-			}
-		}
+		// if (!success) {
+		// 	return {
+		// 		message: "User not authenticated",
+		// 		data: null
+		// 	}
+		// }
 
 		const response = await apiRequest(
 			`${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.batch}`,
