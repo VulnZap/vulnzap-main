@@ -34,8 +34,8 @@ export const config = {
   
   // API endpoints
   api: {
-    // baseUrl: 'https://vulnzap-server.vercel.app',
-    baseUrl: 'http://localhost:4000',
+    baseUrl: 'https://vulnzap-server.vercel.app',
+    // baseUrl: 'http://localhost:4000',
     addOn: '/api/v1',
     enhanced: '/api/v2',
     vulnerability: {

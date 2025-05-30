@@ -364,7 +364,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 				const cached = cacheService.readDocsCache(`amplify-${parameters.user_prompt}`);
 				if (cached) {
 					return {
-						content: [{ type: 'text', text: `[CACHED] Amplified prompt and rules (from cache). Please save the following rules in your agent/IDE's rules file for future compliance:\n\n${JSON.stringify(cached, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.` }]
+						content: [{ type: 'text', text: `[CACHED] Amplified prompt and security rules retrieved from cache. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following security blueprint as 'security-rules.json' in that folder, and reference it throughout development to ensure the project adheres to security best practices:\n\n${JSON.stringify(cached, null, 2)}\n\nThis security blueprint should be consulted for all future development decisions and compliance checks for this project.` }]
 					};
 				}
 				const response = await apiRequest(
@@ -385,7 +385,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 					return {
 						content: [{
 							type: "text",
-							text: `Amplified prompt and rules generated. Please save the following rules in your agent/IDE's rules file for future compliance:\n\n${JSON.stringify(response.data, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`
+							text: `Security-enhanced prompt and best practices generated. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following security blueprint as 'security-rules.json' in that folder, and reference it throughout development to ensure the project adheres to security best practices:\n\n${JSON.stringify(response.data, null, 2)}\n\nThis security blueprint should be consulted for all future development decisions and compliance checks for this project.`
 						}]
 					};
 				}
@@ -426,7 +426,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 				const cached = cacheService.readDocsCache(parameters.package_name);
 				if (cached) {
 					return {
-						content: [{ type: 'text', text: `[CACHED] Documentation/rules (from cache). Please save the following documentation/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(cached, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.` }]
+						content: [{ type: 'text', text: `[CACHED] Package documentation and guidelines retrieved from cache. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following documentation as '${parameters.package_name}-docs.json' in that folder, and reference it when working with this package to ensure best practices:\n\n${JSON.stringify(cached, null, 2)}\n\nThis documentation should be consulted whenever using ${parameters.package_name} in this project.` }]
 					};
 				}
 				const response = await apiRequest(
@@ -447,7 +447,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 					return {
 						content: [{
 							type: "text",
-							text: `Documentation generated. Please save the following documentation/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(response.data, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`
+							text: `Package documentation and best practices generated. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following documentation as '${parameters.package_name}-docs.json' in that folder, and reference it when working with this package to ensure best practices:\n\n${JSON.stringify(response.data, null, 2)}\n\nThis documentation should be consulted whenever using ${parameters.package_name} in this project.`
 						}]
 					};
 				}
@@ -492,7 +492,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 				);
 				if (cached) {
 					return {
-						content: [{ type: 'text', text: `[CACHED] Toolset/rules (from cache). Please save the following toolset/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(cached, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.` }]
+						content: [{ type: 'text', text: `[CACHED] Technology stack and toolset recommendations retrieved from cache. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following toolset blueprint as 'toolset-rules.json' in that folder, and reference it for all technology decisions to maintain consistency and security:\n\n${JSON.stringify(cached, null, 2)}\n\nThis toolset blueprint should guide all package selections and architectural decisions for this project.` }]
 					};
 				}
 				const response = await apiRequest(
@@ -518,7 +518,7 @@ function setupVulnerabilityResource(server: McpServer): void {
 					return {
 						content: [{
 							type: "text",
-							text: `Toolset generated. Please save the following toolset/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(response.data, null, 2)}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`
+							text: `Technology stack and toolset recommendations generated. Please create a 'rules' folder in your current project directory (add it to .gitignore), save the following toolset blueprint as 'toolset-rules.json' in that folder, and reference it for all technology decisions to maintain consistency and security:\n\n${JSON.stringify(response.data, null, 2)}\n\nThis toolset blueprint should guide all package selections and architectural decisions for this project.`
 						}]
 					};
 				}
