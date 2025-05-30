@@ -246,7 +246,7 @@ function setupVulnerabilityResource(server: McpServer): void {
             };
           }
         } catch (apiError) {
-          console.error("API Error:", apiError);
+          // console.error("API Error:", apiError);
           // If API fails, use local vulnerability database as fallback
           const localResult = await checkLocalVulnerability(
             ecosystem,
@@ -509,18 +509,18 @@ function setupVulnerabilityResource(server: McpServer): void {
         }
 
         // Log the API call for debugging
-        const endpoint = `${config.api.baseUrl}${config.api.enhanced}${config.api.ai.base}`;
-        console.log(`Making API request to: ${endpoint}`);
-        console.log(`Request parameters:`, JSON.stringify(parameters, null, 2));
+        // const endpoint = `${config.api.baseUrl}${config.api.enhanced}${config.api.ai.base}`;
+        // console.log(`Making API request to: ${endpoint}`);
+        // console.log(`Request parameters:`, JSON.stringify(parameters, null, 2));
 
         const response = await apiRequest(
-          endpoint,
+          `${config.api.baseUrl}${config.api.enhanced}${config.api.ai.base}`,
           "POST",
           { parameters }, // Wrap parameters in the expected structure
           { "x-api-key": apiKey }
         );
 
-        console.log(`API response:`, JSON.stringify(response, null, 2));
+        // console.log(`API response:`, JSON.stringify(response, null, 2));
 
         // Handle successful response
         if (
@@ -530,22 +530,55 @@ function setupVulnerabilityResource(server: McpServer): void {
             (!response.error && Object.keys(response).length > 0))
         ) {
           const responseData = response.data || response;
-          cacheService.writeDocsCache(
-            `amplify-${parameters.user_prompt}`,
-            responseData
-          );
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Amplified prompt and rules generated. Please save the following rules in your agent/IDE's rules file for future compliance:\n\n${JSON.stringify(
-                  responseData,
-                  null,
-                  2
-                )}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`,
-              },
-            ],
-          };
+
+          // Ensure we have valid data to cache and return
+          if (responseData && typeof responseData === "object") {
+            try {
+              cacheService.writeDocsCache(
+                `amplify-${parameters.user_prompt}`,
+                responseData
+              );
+
+              // Convert the response to a readable string format
+              const formattedResponse =
+                typeof responseData === "string"
+                  ? responseData
+                  : `Amplified prompt and rules generated successfully.\n\nGenerated Rules:\n${JSON.stringify(
+                      responseData,
+                      null,
+                      2
+                    )}`;
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: formattedResponse,
+                  },
+                ],
+              };
+            } catch (cacheError) {
+              // console.error('Cache write error:', cacheError);
+              // Continue without caching if there's a cache error
+              const formattedResponse =
+                typeof responseData === "string"
+                  ? responseData
+                  : `Amplified prompt and rules generated successfully.\n\nGenerated Rules:\n${JSON.stringify(
+                      responseData,
+                      null,
+                      2
+                    )}`;
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: formattedResponse,
+                  },
+                ],
+              };
+            }
+          }
         }
 
         // Handle error response
@@ -569,7 +602,7 @@ function setupVulnerabilityResource(server: McpServer): void {
           ],
         };
       } catch (error: any) {
-        console.error("Error in amplify-feature-prompt:", error);
+        // console.error('Error in amplify-feature-prompt:', error);
         return {
           content: [
             {
@@ -765,12 +798,26 @@ function setupVulnerabilityResource(server: McpServer): void {
             ],
           };
         }
+
+        // Debug the request
+        // const endpoint = `${config.api.baseUrl}${config.api.enhanced}${config.api.tools.base}`;
+        // console.log(`Latest Toolset API endpoint: ${endpoint}`);
+        // console.log(`Latest Toolset parameters:`, JSON.stringify(parameters, null, 2));
+
         const response = await apiRequest(
           `${config.api.baseUrl}${config.api.enhanced}${config.api.tools.base}`,
           "POST",
-          { parameters },
+          {
+            parameters: {
+              ...parameters,
+              user_tools: parameters.user_tools || [],
+              agent_tools: parameters.agent_tools || [],
+            },
+          },
           { "x-api-key": apiKey }
         );
+
+        // console.log(`Latest Toolset response:`, JSON.stringify(response, null, 2));
 
         // Handle successful response
         if (
@@ -780,24 +827,57 @@ function setupVulnerabilityResource(server: McpServer): void {
             (!response.error && Object.keys(response).length > 0))
         ) {
           const responseData = response.data || response;
-          cacheService.writeLatestToolsetCache(
-            parameters.user_prompt,
-            parameters.user_tools || [],
-            parameters.agent_tools || [],
-            responseData
-          );
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Toolset generated. Please save the following toolset/rules in your agent/IDE's rules file for future reference:\n\n${JSON.stringify(
-                  responseData,
-                  null,
-                  2
-                )}\n\nRefer to your IDE/agent documentation for the correct rules file location and format.`,
-              },
-            ],
-          };
+
+          // Ensure we have valid data to cache and return
+          if (responseData && typeof responseData === "object") {
+            try {
+              cacheService.writeLatestToolsetCache(
+                parameters.user_prompt,
+                parameters.user_tools || [],
+                parameters.agent_tools || [],
+                responseData
+              );
+
+              // Convert the response to a readable string format
+              const formattedResponse =
+                typeof responseData === "string"
+                  ? responseData
+                  : `Toolset generated successfully.\n\nRecommended Tools and Configuration:\n${JSON.stringify(
+                      responseData,
+                      null,
+                      2
+                    )}`;
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: formattedResponse,
+                  },
+                ],
+              };
+            } catch (cacheError) {
+              // console.error('Cache write error for toolset:', cacheError);
+              // Continue without caching if there's a cache error
+              const formattedResponse =
+                typeof responseData === "string"
+                  ? responseData
+                  : `Toolset generated successfully.\n\nRecommended Tools and Configuration:\n${JSON.stringify(
+                      responseData,
+                      null,
+                      2
+                    )}`;
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: formattedResponse,
+                  },
+                ],
+              };
+            }
+          }
         }
 
         // Handle error response
@@ -818,9 +898,15 @@ function setupVulnerabilityResource(server: McpServer): void {
           ],
         };
       } catch (error: any) {
+        // console.error('Error in latest_toolset tool:', error);
         return {
           content: [
-            { type: "text", text: `Error getting toolset: ${error.message}` },
+            {
+              type: "text",
+              text: `Error getting toolset: ${
+                error.message || error.toString()
+              }`,
+            },
           ],
         };
       }

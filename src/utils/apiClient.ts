@@ -69,19 +69,71 @@ export async function apiRequest<T = any>(
       async () => {
         const response = await axios(config);
         // Ensure we always return something, even if response.data is undefined
-        return response.data || {};
+        // Also handle cases where response.data might be a string that needs parsing
+        let responseData = response.data;
+
+        if (typeof responseData === "string") {
+          try {
+            // Try to parse if it's a JSON string
+            responseData = JSON.parse(responseData);
+          } catch {
+            // If it's not JSON, return as-is
+            responseData = { message: responseData };
+          }
+        }
+
+        return responseData || {};
       },
       options?.maxRetries,
       options?.initialDelay
     );
   } catch (error: any) {
     // Enhanced error handling to provide more context
-    if (error.message) {
+    // console.error('API request error details:', error);
+
+    // Handle axios errors specifically
+    if (error.response) {
+      // The request was made and the server responded with a status code
+      const status = error.response.status;
+      const statusText = error.response.statusText;
+      const responseData = error.response.data;
+
+      let errorMessage = `HTTP ${status} ${statusText}`;
+
+      if (responseData) {
+        if (typeof responseData === "string") {
+          errorMessage += `: ${responseData}`;
+        } else if (responseData.message) {
+          errorMessage += `: ${responseData.message}`;
+        } else if (responseData.error) {
+          errorMessage += `: ${responseData.error}`;
+        } else {
+          errorMessage += `: ${JSON.stringify(responseData)}`;
+        }
+      }
+
+      throw new Error(`API request failed: ${errorMessage}`);
+    } else if (error.request) {
+      // The request was made but no response was received
+      throw new Error(`API request failed: No response received from server`);
+    } else if (error.message) {
+      // Something happened in setting up the request
       throw new Error(`API request failed: ${error.message}`);
+    } else if (error && typeof error === "object") {
+      // If error is an object with other properties, try to extract useful info
+      const errorKeys = Object.keys(error);
+      if (errorKeys.length > 0) {
+        const errorInfo = errorKeys
+          .map((key) => `${key}: ${error[key]}`)
+          .join(", ");
+        throw new Error(`API request failed: ${errorInfo}`);
+      } else {
+        throw new Error(`API request failed: Unknown error object`);
+      }
     } else if (typeof error === "string") {
       throw new Error(`API request failed: ${error}`);
     } else {
-      throw new Error(`API request failed: ${JSON.stringify(error)}`);
+      throw new Error(`API request failed: Unknown error type`);
     }
   }
 }
