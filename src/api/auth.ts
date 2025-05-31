@@ -122,7 +122,11 @@ export async function clearSession() {
 // Start local server for auth callback
 function startAuthServer(state: string): Promise<AuthSession> {
   return new Promise((resolve, reject) => {
+    let serverClosed = false;
+    
     const server = createServer(async (req, res) => {
+      if (serverClosed) return;
+      
       const url = new URL(req.url!, `http://localhost:${AUTH_PORT}`);
       const urlState = url.searchParams.get('state');
       const access_token = url.searchParams.get('access_token');
@@ -147,146 +151,51 @@ function startAuthServer(state: string): Promise<AuthSession> {
           console.log(chalk.cyan('Please run `vulnzap setup` to configure your API key.\n'));
         }
 
-        // Send success HTML
-        res.writeHead(200, { 'Content-Type': 'text/html' });
-        res.end(`
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="UTF-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>VulnZap Authentication</title>
-              <style>
-                * {
-                  margin: 0;
-                  padding: 0;
-                  box-sizing: border-box;
-                }
+        // Send success response
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
 
-                body {
-                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                  background: #000000;
-                  height: 100vh;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  color: #ffffff;
-                }
-
-                .container {
-                  background: #111111;
-                  padding: 2.5rem;
-                  border-radius: 0.5rem;
-                  text-align: center;
-                  max-width: 90%;
-                  width: 400px;
-                  animation: fadeIn 0.5s ease-out;
-                  border: 1px solid #333333;
-                }
-
-                @keyframes fadeIn {
-                  from {
-                    opacity: 0;
-                    transform: translateY(20px);
-                  }
-                  to {
-                    opacity: 1;
-                    transform: translateY(0);
-                  }
-                }
-
-                @keyframes checkmark {
-                  0% {
-                    transform: scale(0);
-                  }
-                  50% {
-                    transform: scale(1.2);
-                  }
-                  100% {
-                    transform: scale(1);
-                  }
-                }
-
-                .success-icon {
-                  width: 60px;
-                  height: 60px;
-                  background: #ffffff;
-                  border-radius: 50%;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  margin: 0 auto 1.5rem;
-                  animation: checkmark 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
-                }
-
-                .success-icon svg {
-                  width: 30px;
-                  height: 30px;
-                  fill: #000000;
-                }
-
-                h1 {
-                  font-size: 1.5rem;
-                  font-weight: 600;
-                  margin-bottom: 1rem;
-                  color: #ffffff;
-                }
-
-                p {
-                  color: #cccccc;
-                  font-size: 1rem;
-                  line-height: 1.5;
-                  margin-bottom: 1.5rem;
-                }
-
-                .cli-box {
-                  background: #000000;
-                  border: 1px solid #333333;
-                  border-radius: 0.25rem;
-                  padding: 0.75rem;
-                  font-family: 'Courier New', monospace;
-                  color: #ffffff;
-                  font-size: 0.9rem;
-                  margin-top: 1rem;
-                }
-              </style>
-            </head>
-            <body>
-              <div class="container">
-                <div class="success-icon">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/>
-                  </svg>
-                </div>
-                <h1>Successfully Authenticated!</h1>
-                <p>You have been successfully logged in to VulnZap.</p>
-                <div class="cli-box">
-                  > Ready to scan for vulnerabilities
-                </div>
-                <script>
-                  setTimeout(() => window.close(), 5000);
-                </script>
-              </div>
-            </body>
-          </html>
-        `);
-
-        server.close();
-        resolve(session);
+        // Wait 3 seconds before closing to ensure response is sent
+        setTimeout(() => {
+          serverClosed = true;
+          server.close();
+          clearTimeout(timeoutId); // Clear the timeout
+          resolve(session);
+        }, 3000);
       } else {
-        res.writeHead(400, { 'Content-Type': 'text/html' });
-        res.end('Invalid state parameter or missing tokens');
-        server.close();
-        reject(new Error('Invalid state parameter or missing tokens'));
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Invalid state parameter or missing tokens' }));
+        
+        // Wait 3 seconds before closing to ensure response is sent
+        setTimeout(() => {
+          serverClosed = true;
+          server.close();
+          clearTimeout(timeoutId); // Clear the timeout
+          reject(new Error('Invalid state parameter or missing tokens'));
+        }, 3000);
       }
     });
+
+    // Set up 1-minute timeout
+    const timeoutId = setTimeout(() => {
+      if (!serverClosed) {
+        console.log(chalk.yellow('\nAuthentication timeout (1 minute). Please try again.'));
+        serverClosed = true;
+        server.close();
+        reject(new Error('Authentication timeout - no response received within 1 minute'));
+      }
+    }, 120000); // 120 seconds = 2 minutes
 
     server.listen(AUTH_PORT, () => {
       const address = server.address() as AddressInfo;
     });
 
     server.on('error', (error) => {
-      reject(error);
+      if (!serverClosed) {
+        serverClosed = true;
+        clearTimeout(timeoutId);
+        reject(error);
+      }
     });
   });
 }

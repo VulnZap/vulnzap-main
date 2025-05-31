@@ -36,8 +36,8 @@ export const config = {
   },
 
   auth: {
-    baseUrl: "https://vulnzap.com",
-    // baseUrl: 'http://localhost:3000',  // Use for local development
+    // baseUrl: "https://vulnzap.com",
+    baseUrl: "http://localhost:3000", // Use for local development
   },
 
   // API endpoints
