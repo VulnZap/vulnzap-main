@@ -35,9 +35,14 @@ export const config = {
     host: "localhost",
   },
 
+  auth: {
+    baseUrl: "https://vulnzap.com",
+    // baseUrl: 'http://localhost:3000',  // Use for local development
+  },
+
   // API endpoints
   api: {
-    baseUrl: process.env.VULNZAP_API_URL || "https://vulnzap-server.vercel.app",
+    baseUrl: "https://vulnzap-server.vercel.app",
     // baseUrl: 'http://localhost:4000',  // Use for local development
     addOn: "/api/v1",
     enhanced: "/api/v2",

@@ -149,6 +149,161 @@ program
     }
   });
 
+// Command: vulnzap init
+program
+  .command('init')
+  .description('Complete VulnZap onboarding - setup authentication and IDE integration')
+  .action(async () => {
+    // Handle Ctrl+C gracefully
+    const handleExit = () => {
+      console.log(chalk.yellow('\n\nSetup cancelled by user. You can run `vulnzap init` again anytime.'));
+      process.exit(0);
+    };
+    
+    process.on('SIGINT', handleExit);
+    process.on('SIGTERM', handleExit);
+
+    try {
+      displayBanner();
+      console.log(chalk.cyan('Welcome to VulnZap! Let\'s get you set up.\n'));
+
+      // Step 1: Welcome and options
+      const { welcomeChoice } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'welcomeChoice',
+          message: 'How would you like to proceed?',
+          choices: [
+            { name: '🌐 Visit vulnzap.com to learn more', value: 'visit' },
+            { name: '🚀 Continue with setup here', value: 'proceed' }
+          ],
+          default: 'proceed'
+        }
+      ]);
+
+      if (welcomeChoice === 'visit') {
+        console.log(chalk.cyan('\n🌐 Visit vulnzap.com to learn more'));
+        process.exit(0);
+      }
+
+      // Step 2: Check if already authenticated
+      let existingKey;
+      try {
+        existingKey = await getKey();
+      } catch (error) {
+        existingKey = null;
+      }
+
+      if (existingKey) {
+        console.log(chalk.green('✓ API key already configured'));
+        
+        const { replaceKey } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'replaceKey',
+            message: 'Would you like to re-authenticate with a new account?',
+            default: false
+          }
+        ]);
+
+        if (!replaceKey) {
+          console.log(chalk.cyan('Using existing authentication...'));
+        } else {
+          existingKey = null; // Force re-authentication
+        }
+      }
+
+      // Step 3: Authentication flow
+      if (!existingKey) {
+        console.log(chalk.cyan('\n🔐 Setting up authentication...'));
+        console.log(chalk.gray('You\'ll be redirected to your browser for secure login.'));
+        
+        const spinner = ora('Initializing authentication...').start();
+
+        try {
+          spinner.text = 'Opening browser for authentication...';
+          
+          const { success, error } = await auth.login("login");
+
+          if (success) {
+            spinner.succeed(chalk.green('✓ Authentication successful!'));
+          } else {
+            spinner.fail('Authentication failed');
+            if (error) {
+              console.error(chalk.red('Error:'), error);
+            }
+            console.log(chalk.yellow('\nYou can also manually set up your API key:'));
+            console.log(chalk.cyan('1. Visit https://vulnzap.com/dashboard/api-keys'));
+            console.log(chalk.cyan('2. Copy your API key'));
+            console.log(chalk.cyan('3. Run: vulnzap setup -k <your-api-key>'));
+            process.exit(1);
+          }
+        } catch (error: any) {
+          spinner.fail('Authentication failed');
+          console.error(chalk.red('Error:'), error.message);
+          console.log(chalk.yellow('\nFallback: You can manually set up your API key:'));
+          console.log(chalk.cyan('1. Visit https://vulnzap.com/dashboard/api-keys'));
+          console.log(chalk.cyan('2. Copy your API key'));
+          console.log(chalk.cyan('3. Run: vulnzap setup -k <your-api-key>'));
+          process.exit(1);
+        }
+      }
+
+      // Step 4: IDE Selection and Configuration
+      console.log(chalk.cyan('\n🔧 Setting up IDE integration...'));
+      
+      const { selectedIde } = await inquirer.prompt([
+        {
+          type: 'list',
+          name: 'selectedIde',
+          message: 'Which IDE are you using?',
+          choices: [
+            { name: '🎯 Cursor IDE', value: 'cursor' },
+            { name: '🌊 Windsurf IDE', value: 'windsurf' },
+            { name: '🤖 Cline (VS Code Extension)', value: 'cline' }
+          ],
+          default: 'cursor'
+        }
+      ]);
+
+      const ideSpinner = ora(`Configuring ${selectedIde} integration...`).start();
+      
+      try {
+        await connectIDE(selectedIde);
+        ideSpinner.succeed(`✓ ${selectedIde} integration configured successfully!`);
+      } catch (error: any) {
+        ideSpinner.fail(`Failed to configure ${selectedIde} integration`);
+        console.error(chalk.red('Error:'), error.message);
+        console.log(chalk.yellow(`\nYou can manually configure ${selectedIde} later by running:`));
+        console.log(chalk.cyan(`vulnzap connect --ide ${selectedIde}`));
+      }
+
+      // Step 5: Success and next steps
+      console.log(chalk.green('\n🎉 VulnZap setup completed successfully!\n'));
+      
+      console.log(chalk.cyan('What\'s next?'));
+      console.log('• VulnZap is now protecting your AI-generated code');
+      console.log('• Start coding in your IDE - vulnerabilities will be caught automatically');
+      console.log('• Check detailed logs and analytics at: https://vulnzap.com/dashboard/logs');
+      console.log('• Run `vulnzap check <package>` to manually scan packages');
+      console.log('• Run `vulnzap status` to verify everything is working\n');
+      
+      console.log(chalk.gray('Need help? Visit https://vulnzap.com/docs or run `vulnzap help`'));
+
+    } catch (error: any) {
+      console.error(chalk.red('\nSetup failed:'), error.message);
+      console.log(chalk.yellow('\nYou can:'));
+      console.log('• Run `vulnzap init` again to retry');
+      console.log('• Run `vulnzap setup` for manual configuration');
+      console.log('• Visit https://vulnzap.com/support for help');
+      process.exit(1);
+    } finally {
+      // Remove signal handlers
+      process.removeListener('SIGINT', handleExit);
+      process.removeListener('SIGTERM', handleExit);
+    }
+  });
+
 // Command: vulnzap login (Disabled for now)
 // program
 //   .command('login')
@@ -602,6 +757,34 @@ program
   .description('Display help information')
   .action(() => {
     displayBanner();
+    
+    console.log(chalk.cyan('Quick Start:'));
+    console.log('  npx vulnzap init          Complete onboarding (recommended for new users)');
+    console.log('');
+    console.log(chalk.cyan('Available Commands:'));
+    console.log('  init                      Complete VulnZap setup with authentication and IDE integration');
+    console.log('  setup                     Configure VulnZap with your API key');
+    console.log('  connect                   Connect VulnZap to your AI-powered IDE');
+    console.log('  check <package>           Check a package for vulnerabilities');
+    console.log('  batch-scan                Scan all packages in current directory');
+    console.log('  status                    Check VulnZap server health');
+    console.log('  account                   View account information');
+    console.log('  help                      Display this help information');
+    console.log('');
+    console.log(chalk.cyan('Examples:'));
+    console.log('  vulnzap init                                    # Complete setup (recommended)');
+    console.log('  vulnzap check npm:express@4.17.1               # Check specific package');
+    console.log('  vulnzap setup -k your-api-key                  # Manual API key setup');
+    console.log('  vulnzap connect --ide cursor                   # Connect to Cursor IDE');
+    console.log('');
+    console.log(chalk.cyan('Need Help?'));
+    console.log('  Documentation: https://vulnzap.com/docs');
+    console.log('  Support: https://vulnzap.com/support');
+    console.log('  Dashboard: https://vulnzap.com/dashboard');
+    console.log('');
+    
+    // Also show the default commander help for detailed options
+    console.log(chalk.gray('Detailed command options:'));
     program.help();
   });
 
@@ -611,7 +794,15 @@ program.parse(process.argv);
 // If no args, display help
 if (process.argv.length === 2) {
   displayBanner();
-  program.help();
+  console.log(chalk.cyan('🚀 Get started with VulnZap:'));
+  console.log('');
+  console.log(chalk.green('  npx vulnzap init') + '          Complete setup (recommended for new users)');
+  console.log('  vulnzap help                Show all available commands');
+  console.log('');
+  console.log(chalk.gray('For existing users:'));
+  console.log('  vulnzap check <package>     Check a package for vulnerabilities');
+  console.log('  vulnzap status              Check server health');
+  console.log('');
 }
 
 // Helper function to handle IDE connection logic
