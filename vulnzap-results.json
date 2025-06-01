@@ -1,0 +1,200 @@
+[
+  {
+    "ecosystem": "npm",
+    "package": "@iarna/toml",
+    "version": "2.2.5",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@modelcontextprotocol/sdk",
+    "version": "1.12.1",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@xmldom/xmldom",
+    "version": "0.9.8",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "axios",
+    "version": "1.9.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "chalk",
+    "version": "5.4.1",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "commander",
+    "version": "11.1.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "conf",
+    "version": "11.0.2",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "dotenv",
+    "version": "16.5.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "inquirer",
+    "version": "9.3.7",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "keytar",
+    "version": "7.9.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "node-fetch",
+    "version": "3.3.2",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "open",
+    "version": "9.1.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "ora",
+    "version": "7.0.1",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "qrcode-terminal",
+    "version": "0.12.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "semver",
+    "version": "7.7.2",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "uuid",
+    "version": "9.0.1",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "xpath",
+    "version": "0.0.34",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "zod",
+    "version": "3.25.36",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/inquirer",
+    "version": "9.0.8",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/jest",
+    "version": "29.5.14",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/node",
+    "version": "20.17.52",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/qrcode-terminal",
+    "version": "0.12.2",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/semver",
+    "version": "7.7.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@types/uuid",
+    "version": "9.0.8",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@typescript-eslint/eslint-plugin",
+    "version": "6.21.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "@typescript-eslint/parser",
+    "version": "6.21.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "eslint",
+    "version": "8.57.1",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "jest",
+    "version": "29.7.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "nock",
+    "version": "14.0.4",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "ts-jest",
+    "version": "29.3.4",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "ts-node",
+    "version": "10.9.2",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "ts-node-dev",
+    "version": "2.0.0",
+    "result": []
+  },
+  {
+    "ecosystem": "npm",
+    "package": "typescript",
+    "version": "5.8.3",
+    "result": []
+  }
+]
