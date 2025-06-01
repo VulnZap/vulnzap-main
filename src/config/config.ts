@@ -36,14 +36,12 @@ export const config = {
   },
 
   auth: {
-    // baseUrl: "https://vulnzap.com",
-    baseUrl: "http://localhost:3000", // Use for local development
+    baseUrl: "https://vulnzap.com",
   },
 
   // API endpoints
   api: {
     baseUrl: "https://vulnzap-server.vercel.app",
-    // baseUrl: 'http://localhost:4000',  // Use for local development
     addOn: "/api/v1",
     enhanced: "/api/v2",
     vulnerability: {
