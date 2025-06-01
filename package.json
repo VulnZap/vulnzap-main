@@ -1,5 +1,5 @@
 {
-  "name": "@vulnzap/cli",
+  "name": "vulnzap-cli",
   "version": "1.0.3",
   "description": "Secure AI-generated code by intercepting vulnerabilities in real-time",
   "main": "dist/cli.js",
