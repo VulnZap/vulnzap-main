@@ -62,6 +62,9 @@ export const config = {
     ai: {
       base: "/enhanced-amplify-prompt",
     },
+    consult: {
+      base: "/consult",
+    },
   },
 };
 

@@ -31,6 +31,7 @@ import {
 } from "./types/response.js";
 import { cacheService } from "./services/cache.js";
 import { apiRequest } from "./utils/apiClient.js";
+import { formatConsultationResponse } from "./utils/consultationHelper.js";
 
 // Load environment variables
 dotenv.config();
@@ -906,6 +907,170 @@ function setupVulnerabilityResource(server: McpServer): void {
               text: `Error getting toolset: ${
                 error.message || error.toString()
               }`,
+            },
+          ],
+        };
+      }
+    }
+  );
+
+  // Expert Consultation tool
+  server.tool(
+    "expert-consult",
+    'Use this tool when the agent cannot solve a bug or issue after 1-2 attempts. It collects relevant code snippets, project context, and the specific issue description to send to expert consultation API for advanced debugging and implementation guidance. The format required for this tool is:\n\n```json\n{\n  "issue_description": "TypeError: Cannot read property \'length\' of undefined in user validation function",\n  "code_snippets": [\n    {\n      "filepath": "src/utils/validation.js",\n      "snippet": "function validateUser(user) {\\n  if (user.name.length < 3) {\\n    return false;\\n  }\\n  return true;\\n}",\n      "line_range": "15-20",\n      "language": "javascript",\n      "context": "User input validation function"\n    }\n  ],\n  "project_context": "Node.js REST API for user management",\n  "error_logs": "TypeError: Cannot read property \'length\' of undefined\\n    at validateUser (validation.js:16:18)",\n  "attempted_solutions": ["Added null check", "Tried optional chaining"],\n  "environment_info": "Node.js 18.x, Express 4.x",\n  "urgency_level": "medium"\n}\n```',
+    {
+      parameters: z.object({
+        issue_description: z
+          .string()
+          .describe("Detailed description of the bug, error, or issue you're facing"),
+        code_snippets: z
+          .array(z.object({
+            filepath: z.string().describe("Path to the file relative to project root"),
+            snippet: z.string().describe("The specific code snippet related to the issue"),
+            line_range: z.string().optional().describe("Line range of the snippet (e.g., '45-67')"),
+            language: z.string().optional().describe("Programming language of the snippet"),
+            context: z.string().optional().describe("Brief context about what this snippet does")
+          }))
+          .describe("Array of relevant code snippets related to the issue"),
+        project_context: z
+          .string()
+          .optional()
+          .describe("Brief description of the project, its purpose, and current state"),
+        error_logs: z
+          .string()
+          .optional()
+          .describe("Any error messages, stack traces, or console outputs"),
+        attempted_solutions: z
+          .array(z.string())
+          .optional()
+          .describe("List of solutions or approaches already tried"),
+        environment_info: z
+          .string()
+          .optional()
+          .describe("Environment details (OS, runtime versions, dependencies, etc.)"),
+        urgency_level: z
+          .enum(["low", "medium", "high", "critical"])
+          .optional()
+          .describe("Urgency level of the issue")
+      }),
+    },
+    async ({ parameters }) => {
+      const apiKey = await getKey();
+      if (!apiKey) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "❌ **VulnZap API key not configured**\n\nPlease set VULNZAP_API_KEY environment variable or run `vulnzap setup` to configure your API key before using expert consultation.",
+            },
+          ],
+        };
+      }
+
+      try {
+        // Prepare the exact API request format as specified
+        const consultationPayload = {
+          parameters: {
+            issue_description: parameters.issue_description,
+            code_snippets: parameters.code_snippets.map(snippet => ({
+              filepath: snippet.filepath,
+              snippet: snippet.snippet,
+              line_range: snippet.line_range,
+              language: snippet.language,
+              context: snippet.context
+            })),
+            project_context: parameters.project_context || "No project context provided",
+            error_logs: parameters.error_logs || "No error logs provided",
+            attempted_solutions: parameters.attempted_solutions || [],
+            environment_info: parameters.environment_info || "Environment info not provided",
+            urgency_level: parameters.urgency_level || "medium"
+          }
+        };
+
+        // Create cache key for consultation
+        const cacheKey = `consult-${JSON.stringify({
+          issue: parameters.issue_description.substring(0, 50),
+          snippetsHash: parameters.code_snippets.map(s => `${s.filepath}:${s.line_range || 'unknown'}`).join(','),
+          urgency: parameters.urgency_level || 'medium'
+        })}`;
+        
+        // Check cache first (optional for consultations)
+        const cached = cacheService.readDocsCache(cacheKey);
+        if (cached) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `🔄 **[CACHED] Expert Consultation Response**\n\n${formatConsultationResponse(cached)}\n\n⚠️ **Note**: This is a cached response. If the issue has changed significantly, clear the cache and consult again.`,
+              },
+            ],
+          };
+        }
+
+        // Make API request to consultation endpoint
+        const response = await apiRequest(
+          `${config.api.baseUrl}${config.api.enhanced}${config.api.consult.base}`,
+          "POST",
+          consultationPayload,
+          { "x-api-key": apiKey }
+        );
+
+        // Handle successful response
+        if (
+          response &&
+          (response.data ||
+            response.success ||
+            (!response.error && Object.keys(response).length > 0))
+        ) {
+          const responseData = response.data || response;
+
+          // Cache the consultation result
+          try {
+            cacheService.writeDocsCache(cacheKey, responseData);
+          } catch (cacheError) {
+            // Continue without caching if there's an error
+            console.warn("Failed to cache consultation result:", cacheError);
+          }
+
+          // Format and return the response with actionable guidance
+          const formattedResponse = formatConsultationResponse(responseData);
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `✅ **Expert Consultation Completed**\n\n${formattedResponse}\n\n📋 **Next Actions for Agent:**\n1. **Review the expert analysis** and understand the root cause\n2. **Implement the recommended solutions** step by step\n3. **Test each change** before proceeding to the next\n4. **Verify the fix** by running the code and checking for errors\n5. **Apply best practices** mentioned in the recommendations\n6. **Document the solution** for future reference\n7. **If issues persist**, gather updated error logs and consult again with new context\n\n💡 **Pro Tip**: Follow the recommended approach exactly as described by the expert for best results.`,
+              },
+            ],
+          };
+        }
+
+        // Handle error response
+        if (response && response.error) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ **Expert Consultation Error**\n\n**Error Details:** ${response.error}\n\n**Recommended Actions:**\n1. Check your network connection\n2. Verify your VulnZap API key is valid\n3. Ensure the consultation request format is correct\n4. Try again in a few moments\n5. If the problem persists, contact VulnZap support\n\n**Debug Info:**\n- API Endpoint: ${config.api.baseUrl}${config.api.enhanced}${config.api.consult.base}\n- Request includes: ${parameters.code_snippets.length} code snippets\n- Issue urgency: ${parameters.urgency_level || 'medium'}`,
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: "⚠️ **No Response from Expert Consultation API**\n\n**Possible causes:**\n- API service temporarily unavailable\n- Network connectivity issues\n- Request timeout\n\n**Recommended Actions:**\n1. Wait a few minutes and try again\n2. Check your internet connection\n3. Verify the VulnZap service status\n4. If urgent, try breaking down the issue into smaller consultation requests\n\n**Alternative Approaches:**\n- Research the specific error messages online\n- Check official documentation for the technologies involved\n- Review similar issues in community forums\n- Consider asking for help in developer communities",
+            },
+          ],
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `❌ **Expert Consultation Failed**\n\n**Error:** ${error.message || error.toString()}\n\n**Troubleshooting Steps:**\n1. **Check network connection** - Ensure you can reach external APIs\n2. **Verify API key** - Make sure your VulnZap API key is valid and active\n3. **Review request format** - Ensure all required parameters are provided correctly\n4. **Check service status** - VulnZap consultation service might be temporarily down\n5. **Retry with simplified request** - Try with fewer code snippets or shorter descriptions\n\n**Request Summary:**\n- Issue: ${parameters.issue_description.substring(0, 100)}${parameters.issue_description.length > 100 ? '...' : ''}\n- Code snippets: ${parameters.code_snippets.length}\n- Urgency: ${parameters.urgency_level || 'medium'}\n\n**If this error persists, contact VulnZap support with the above details.**`,
             },
           ],
         };

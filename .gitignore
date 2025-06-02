@@ -42,17 +42,11 @@ coverage/
 .parcel-cache/
 cache/
 
+# User data directory (for development)
+.vulnzap/
+
+docs
+examples
+
 # Local History for Visual Studio Code
 .history/
-
-# NVD API cache
-cache/
-
-# Supabase keys
-.supabase/
-
-# Stripe keys
-.stripe/
-
-# User data directory (for development)
-.vulnzap/ 
