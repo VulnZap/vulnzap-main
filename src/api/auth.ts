@@ -46,16 +46,39 @@ export async function saveKey(apiKey: string | null) {
   if (!apiKey) return;
   
   try {
-    ensureSessionDir();
-    const configPath = path.join(os.homedir(), '.vulnzap', 'config.json');
-    const config = fs.existsSync(configPath) 
-      ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
-      : {};
+    // Ensure the .vulnzap directory exists
+    const vulnzapDir = path.join(os.homedir(), '.vulnzap');
+    if (!fs.existsSync(vulnzapDir)) {
+      fs.mkdirSync(vulnzapDir, { recursive: true, mode: 0o755 });
+    }
     
+    // Define the config file path
+    const configPath = path.join(vulnzapDir, 'config.json');
+    
+    // Read existing config or create empty object
+    let config: { apiKey?: string; [key: string]: any } = {};
+    if (fs.existsSync(configPath)) {
+      try {
+        const configData = fs.readFileSync(configPath, 'utf8');
+        config = JSON.parse(configData);
+      } catch (parseError) {
+        console.warn('Warning: Could not parse existing config.json, creating new one');
+        config = {};
+      }
+    }
+    
+    // Update config with new API key
     config.apiKey = apiKey;
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
-  } catch (error) {
+    
+    // Write the config file with proper permissions
+    const configContent = JSON.stringify(config, null, 2);
+    fs.writeFileSync(configPath, configContent, { 
+      encoding: 'utf8', 
+      mode: 0o600 // Read/write for owner only for security
+    });
+  } catch (error: any) {
     console.error('Error saving API key:', error);
+    throw new Error(`Failed to save API key: ${error.message}`);
   }
 }
 
@@ -65,18 +88,26 @@ export async function getKey(): Promise<string> {
     const envKey = process.env.VULNZAP_API_KEY;
     if (envKey) return envKey;
 
-    // Else check in config file
-    const configPath = path.join(os.homedir(), '.vulnzap', 'config.json');
+    // Check in config file
+    const vulnzapDir = path.join(os.homedir(), '.vulnzap');
+    const configPath = path.join(vulnzapDir, 'config.json');
+    
     if (!fs.existsSync(configPath)) {
       throw new Error('API key not found. Please run `vulnzap setup -k <your-api-key>` to save the API key to your system.');
     }
 
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    if (!config.apiKey) {
-      throw new Error('API key not found in config. Please run `vulnzap setup -k <your-api-key>` to save the API key to your system.');
-    }
+    try {
+      const configData = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(configData);
+      
+      if (!config.apiKey) {
+        throw new Error('API key not found in config. Please run `vulnzap setup -k <your-api-key>` to save the API key to your system.');
+      }
 
-    return config.apiKey;
+      return config.apiKey;
+    } catch (parseError) {
+      throw new Error('Config file is corrupted. Please run `vulnzap setup -k <your-api-key>` to reconfigure your API key.');
+    }
   } catch (error: any) {
     throw new Error(`Failed to get API key: ${error.message}`);
   }
@@ -176,13 +207,13 @@ function startAuthServer(state: string): Promise<AuthSession> {
       }
     });
 
-    // Set up 1-minute timeout
+    // Set up 2-minute timeout
     const timeoutId = setTimeout(() => {
       if (!serverClosed) {
-        console.log(chalk.yellow('\nAuthentication timeout (1 minute). Please try again.'));
+        console.log(chalk.yellow('\nAuthentication timeout (2 minutes). Please try again.'));
         serverClosed = true;
         server.close();
-        reject(new Error('Authentication timeout - no response received within 1 minute'));
+        reject(new Error('Authentication timeout - no response received within 2 minutes'));
       }
     }, 120000); // 120 seconds = 2 minutes
 

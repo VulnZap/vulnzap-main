@@ -260,7 +260,8 @@ program
           choices: [
             { name: '🎯 Cursor IDE', value: 'cursor' },
             { name: '🌊 Windsurf IDE', value: 'windsurf' },
-            { name: '🤖 Cline (VS Code Extension)', value: 'cline' }
+            { name: '🤖 Cline (VS Code Extension)', value: 'cline' },
+            { name: '🔍 Other (Manual Configuration)', value: 'other' }
           ],
           default: 'cursor'
         }
@@ -271,24 +272,23 @@ program
       try {
         await connectIDE(selectedIde);
         ideSpinner.succeed(`✓ ${selectedIde} integration configured successfully!`);
+
+        // Step 5: Success and next steps
+        console.log(chalk.green('\n🎉 VulnZap setup completed successfully!\n'));
+        console.log(chalk.cyan('What\'s next?'));
+        console.log('• VulnZap is now protecting your AI-generated code');
+        console.log('• Start coding in your IDE - vulnerabilities will be caught automatically');
+        console.log('• Check detailed logs and analytics at: https://vulnzap.com/dashboard/logs');
+        console.log('• Run `vulnzap check <package>` to manually scan packages');
+        console.log('• Run `vulnzap status` to verify everything is working\n');
+        
+        console.log(chalk.gray('Need help? Visit https://vulnzap.com/docs or run `vulnzap help`'));
       } catch (error: any) {
         ideSpinner.fail(`Failed to configure ${selectedIde} integration`);
         console.error(chalk.red('Error:'), error.message);
         console.log(chalk.yellow(`\nYou can manually configure ${selectedIde} later by running:`));
         console.log(chalk.cyan(`vulnzap connect --ide ${selectedIde}`));
       }
-
-      // Step 5: Success and next steps
-      console.log(chalk.green('\n🎉 VulnZap setup completed successfully!\n'));
-      
-      console.log(chalk.cyan('What\'s next?'));
-      console.log('• VulnZap is now protecting your AI-generated code');
-      console.log('• Start coding in your IDE - vulnerabilities will be caught automatically');
-      console.log('• Check detailed logs and analytics at: https://vulnzap.com/dashboard/logs');
-      console.log('• Run `vulnzap check <package>` to manually scan packages');
-      console.log('• Run `vulnzap status` to verify everything is working\n');
-      
-      console.log(chalk.gray('Need help? Visit https://vulnzap.com/docs or run `vulnzap help`'));
 
     } catch (error: any) {
       console.error(chalk.red('\nSetup failed:'), error.message);
@@ -799,10 +799,6 @@ if (process.argv.length === 2) {
   console.log(chalk.green('  npx vulnzap init') + '          Complete setup (recommended for new users)');
   console.log('  vulnzap help                Show all available commands');
   console.log('');
-  console.log(chalk.gray('For existing users:'));
-  console.log('  vulnzap check <package>     Check a package for vulnerabilities');
-  console.log('  vulnzap status              Check server health');
-  console.log('');
 }
 
 // Helper function to handle IDE connection logic
@@ -814,30 +810,48 @@ async function connectIDE(ide: string) {
   logStream.end();
 
   if (ide === 'cursor') {
-    const cursorMcpConfigLocation = os.homedir() + '/.cursor/mcp.json';
-    if (!fs.existsSync(cursorMcpConfigLocation)) {
-      console.error(chalk.red('Error: Cursor MCP config not found.'));
-      console.log('Please install Cursor and try again.');
-      return;
+    // Ensure the .cursor directory exists
+    const cursorDir = path.join(os.homedir(), '.cursor');
+    if (!fs.existsSync(cursorDir)) {
+      fs.mkdirSync(cursorDir, { recursive: true });
+      console.log(chalk.yellow('Created .cursor directory'));
     }
-    const cursorMcpConfig = JSON.parse(fs.readFileSync(cursorMcpConfigLocation, 'utf8'));
-
-    // Save tokens in mcp.json
-    if (!cursorMcpConfig.mcp) {
-      cursorMcpConfig.mcpServers = {
-        VulnZap: {
-          command: "vulnzap",
-          args: ["secure", "--ide", "cursor", "--port", "3456"]
-        }
-      };
+    
+    // Define the MCP config file path
+    const cursorMcpConfigLocation = path.join(cursorDir, 'mcp.json');
+    
+    // Read existing config or create empty object
+    let cursorMcpConfig: { mcpServers?: any; [key: string]: any } = {};
+    if (fs.existsSync(cursorMcpConfigLocation)) {
+      try {
+        const configData = fs.readFileSync(cursorMcpConfigLocation, 'utf8');
+        cursorMcpConfig = JSON.parse(configData);
+      } catch (parseError) {
+        console.warn(chalk.yellow('Warning: Could not parse existing mcp.json, creating new one'));
+        cursorMcpConfig = {};
+      }
     } else {
-      cursorMcpConfig.mcpServers.VulnZap = {
-        command: "vulnzap",
-        args: ["secure", "--ide", "cursor", "--port", "3456"]
-      };
+      console.log(chalk.yellow('Creating new mcp.json file'));
     }
-    fs.writeFileSync(cursorMcpConfigLocation, JSON.stringify(cursorMcpConfig, null, 2));
-    console.log(chalk.green('✓') + ' Cursor MCP config updated successfully with API keys');
+
+    // Initialize mcpServers if it doesn't exist
+    if (!cursorMcpConfig.mcpServers) {
+      cursorMcpConfig.mcpServers = {};
+    }
+
+    // Add VulnZap configuration
+    cursorMcpConfig.mcpServers.VulnZap = {
+      command: "vulnzap",
+      args: ["secure", "--ide", "cursor", "--port", "3456"]
+    };
+
+    // Write the config file with proper permissions
+    const configContent = JSON.stringify(cursorMcpConfig, null, 2);
+    fs.writeFileSync(cursorMcpConfigLocation, configContent, { 
+      encoding: 'utf8'
+    });
+    
+    console.log(chalk.green('✓') + ' Cursor MCP config updated successfully');
 
     // Display helpful information
     console.log('\nConfiguration Summary:');
@@ -850,7 +864,7 @@ async function connectIDE(ide: string) {
     console.log('2. Find "VulnZap" in the server list');
     console.log('3. Use the toggle switch to enable/disable');
     console.log('4. Click on server name to access additional settings');
-    
+
   } else if (ide === 'windsurf') {
     // Windsurf MCP config location and structure
     const windsurfDir = path.join(os.homedir(), '.codeium', 'windsurf');
@@ -943,7 +957,14 @@ async function connectIDE(ide: string) {
     console.log('4. Click on server name to access additional settings');
     
   } else {
-    console.error(chalk.red('Error: Unsupported IDE.'));
-    console.log('Supported IDEs: cursor, windsurf, cline');
+    console.error(chalk.cyan('Add this to your IDE\'s mcp config:'));
+    console.log(chalk.cyan(`{
+      "mcpServers": {
+        "VulnZap": {
+          "command": "vulnzap",
+          "args": ["secure", "--ide", "${ide}", "--port", "3456"]
+        }
+      }
+    }`));
   }
 } 
