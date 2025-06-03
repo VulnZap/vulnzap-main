@@ -22,6 +22,8 @@ import { batchScan } from './api/batchScan.js';
 import path from 'path';
 import { execSync } from 'child_process';
 import { cacheService } from './services/cache.js';
+import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
+import { getMockProfile } from './utils/mockUser.js';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -187,6 +189,9 @@ program
       
       await saveKey(apiKey);
       spinner.succeed(typography.success('Authentication configured'));
+      
+      // Show personalized welcome message
+      await displayUserWelcome();
 
       if (options.ide) {
         spacing.line();
@@ -288,6 +293,9 @@ program
 
           if (success) {
             spinner.succeed(typography.success('Authentication successful'));
+            
+            // Show personalized welcome message
+            await displayUserWelcome();
           } else {
             spinner.fail('Authentication failed');
             if (error) {
@@ -464,6 +472,11 @@ program
       try {
         await getKey();
         authSpinner.succeed(typography.success('Authentication configured'));
+        
+        // Show user profile information
+        spacing.section();
+        await displayUserStatus();
+        
       } catch (error) {
         authSpinner.fail(typography.warning('Authentication not configured'));
         spacing.line();
@@ -578,6 +591,9 @@ program
           console.log(typography.muted('  Result may be up to 5 days old'));
         } else {
           spinner.succeed(typography.success('Analysis complete'));
+          
+          // Show usage info after successful scan (but not for cached results)
+          await displayUserWelcome();
         }
         
         spacing.line();
@@ -773,6 +789,10 @@ program
     spacing.section();
     
     try {
+      // Show detailed user status
+      await displayUserStatus();
+      
+      spacing.section();
       console.log(typography.info('Dashboard Access'));
       console.log(typography.muted('  Visit your dashboard to manage account settings:'));
       console.log(typography.accent('  https://vulnzap.com/dashboard'));
@@ -891,6 +911,102 @@ program
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
+    }
+  });
+
+// Command: vulnzap demo (for testing personalized features)
+program
+  .command('demo')
+  .description('Demo personalized CLI features (development only)')
+  .option('--tier <tier>', 'User tier to demo (free, pro, enterprise)', 'free')
+  .action(async (options) => {
+    displayBanner();
+    console.log(typography.title('Personalized CLI Demo'));
+    spacing.section();
+    
+    // Create mock profile for demo
+    const mockProfile = getMockProfile(options.tier as 'free' | 'pro' | 'enterprise');
+    
+    try {
+      console.log(typography.info(`Demonstrating ${options.tier} tier experience:`));
+      spacing.line();
+      
+      // Manually create the displays with mock data
+      const firstName = mockProfile.name.split(' ')[0];
+      console.log(typography.subtitle(`Welcome back, ${firstName}`));
+      
+      // Tier and usage display
+      const tierDisplay = mockProfile.tier === 'free' ? typography.muted('Free') :
+                         mockProfile.tier === 'pro' ? typography.accent('Pro') :
+                         typography.success('Enterprise');
+      
+      const remaining = mockProfile.usage.limit - mockProfile.usage.current;
+      const percentage = (mockProfile.usage.current / mockProfile.usage.limit) * 100;
+      
+      let usageDisplay;
+      if (percentage >= 90) {
+        usageDisplay = typography.error(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+      } else if (percentage >= 75) {
+        usageDisplay = typography.warning(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+      } else {
+        usageDisplay = typography.muted(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+      }
+      
+      console.log(`${tierDisplay} • ${usageDisplay}`);
+      
+      // FOMO message
+      if (mockProfile.tier === 'free' && percentage >= 75) {
+        spacing.line();
+        if (percentage >= 90) {
+          console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
+        } else {
+          console.log(typography.muted('Consider upgrading to Pro to avoid hitting limits'));
+        }
+      }
+      
+      spacing.section();
+      console.log(typography.subtitle('Full Status View:'));
+      spacing.line();
+      
+      console.log(typography.info('Account Information'));
+      spacing.line();
+      console.log(typography.muted(`  Name: ${mockProfile.name}`));
+      console.log(typography.muted(`  Email: ${mockProfile.email}`));
+      console.log(typography.muted(`  Tier: ${mockProfile.tier.charAt(0).toUpperCase() + mockProfile.tier.slice(1)}`));
+      
+      spacing.line();
+      console.log(typography.info('Usage This Month'));
+      spacing.line();
+      
+      const percentageRounded = Math.round(percentage);
+      console.log(typography.muted(`  Scans used: ${mockProfile.usage.current} of ${mockProfile.usage.limit} (${percentageRounded}%)`));
+      console.log(typography.muted(`  Remaining: ${remaining} scans`));
+      
+      // Progress bar
+      const barLength = 20;
+      const filledLength = Math.round((mockProfile.usage.current / mockProfile.usage.limit) * barLength);
+      const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
+      
+      let barColor;
+      if (percentage >= 90) barColor = chalk.red;
+      else if (percentage >= 75) barColor = chalk.yellow;
+      else if (percentage >= 50) barColor = chalk.cyan;
+      else barColor = chalk.green;
+      
+      console.log(typography.muted(`  Progress: ${barColor(bar)} ${percentageRounded}%`));
+      
+      if (mockProfile.tier === 'free' && percentage >= 75) {
+        spacing.section();
+        if (percentage >= 90) {
+          console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
+        } else {
+          console.log(typography.muted('Consider upgrading to Pro to avoid hitting limits'));
+        }
+        console.log(typography.muted('Visit vulnzap.com/pricing to upgrade'));
+      }
+      
+    } catch (error: any) {
+      console.error(typography.error('Demo failed:'), error.message);
     }
   });
 

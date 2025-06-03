@@ -1,6 +1,6 @@
 {
   "name": "vulnzap",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Secure AI-generated code by intercepting vulnerabilities in real-time",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -71,7 +71,7 @@
     "semver": "^7.7.2",
     "string-width": "^5.1.2",
     "uuid": "^9.0.1",
-    "vulnzap": "^1.2.0",
+    "vulnzap": "^1.3.0",
     "xpath": "^0.0.34",
     "zod": "^3.25.36"
   },
