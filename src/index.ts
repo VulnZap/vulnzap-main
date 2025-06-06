@@ -73,13 +73,13 @@ async function generateClarifyingQuestions(parameters: any): Promise<any> {
         type: "text",
         text: `📋 **Project Requirements Analysis**
 
-I need to understand your project better to provide the most appropriate security blueprint and recommendations. Based on your request: "${userPrompt}"
+We  need to understand the user's project better to provide the most appropriate security blueprint and recommendations. Based on user's request: "${userPrompt}"
 
-Please answer the following questions:
+Please ask the user to answer the following questions:
 
 ${questions.map((q, i) => `**${i + 1}. ${q.question}**\n${q.options ? `Options: ${q.options.join(', ')}\n` : ''}${q.context ? `Context: ${q.context}\n` : ''}`).join('\n')}
 
-Once you provide these answers, I'll call the amplify-feature-prompt tool again with phase="generate" and your responses to create a tailored security blueprint for your project.
+Once you get these answers, Call the kickstart-project tool again with phase="generate" and your responses to create a tailored security blueprint for the user's project.
 
 **Example response format:**
 \`\`\`
@@ -238,19 +238,6 @@ function analyzePromptAndGenerateQuestions(userPrompt: string): Array<{ question
     });
   }
 
-  // Technology preferences
-  questions.push({
-    question: "Do you have any preferred technologies or constraints?",
-    context: "e.g., 'Must use Node.js', 'React preferred', 'No cloud dependencies', etc."
-  });
-
-  // Compliance and regulations
-  questions.push({
-    question: "Are there any compliance requirements?",
-    options: ["None", "GDPR (EU users)", "HIPAA (healthcare)", "SOX (financial)", "Other industry standards"],
-    context: "Compliance requirements significantly impact the security architecture."
-  })
-
   // Timeline and budget
   questions.push({
     question: "What's your timeline and resource constraints?",
@@ -329,8 +316,6 @@ export async function startMcpServer(): Promise<void> {
   // Start the server
   await server.connect(transport);
 }
-
-
 
 /**
  * Set up the vulnerability resource for the MCP server
@@ -519,7 +504,14 @@ function setupVulnerabilityResource(server: McpServer): void {
   // Premium feature: Batch vulnerability scanning
   server.tool(
     "batch-scan",
-    "Scan all packages in a directory for vulnerabilities. This tool scans a specified project directory for dependencies (across package.json, requirements.txt, etc.) and performs comprehensive vulnerability analysis on all detected packages. Always provide the absolute/full directory path to ensure correct package detection.",
+    "Scan all dependencies in a project directory for known security vulnerabilities.\n\n" +
+    "Call this tool whenever you need to:\n" +
+    "- Check the security status of all packages in a codebase (before deployment, during onboarding, or after major changes)\n" +
+    "- Audit a project for vulnerable dependencies across package.json, requirements.txt, etc.\n\n" +
+    "Input:\n" +
+    "- directory (string, required): Absolute path to the project directory to scan (e.g., 'C:\\Users\\username\\Desktop\\project')\n" +
+    "- ecosystem (string, optional): Limit scan to a specific package ecosystem (e.g., 'npm', 'pip')\n\n" +
+    "Use this tool to ensure the entire project is free from known dependency vulnerabilities before release or as part of regular security hygiene.",
     {
       parameters: z.object({
         directory: z
@@ -659,10 +651,59 @@ function setupVulnerabilityResource(server: McpServer): void {
     }
   );
 
-  // Enhanced Amplify Feature Prompt tool
+  // Kickstart Project tool
   server.tool(
-    "amplify-feature-prompt",
-    "This tool MUST be called automatically whenever the user requests a new feature, application, or development task (e.g., 'build X', 'add Y', 'create Z', 'implement A', etc.). The tool works in two phases: 1) ANALYZE phase (default) - analyzes the user's request and generates clarifying questions to understand their specific needs, scope, and constraints. 2) GENERATE phase - once the user provides answers, call this tool again with phase='generate' and user_answers to create a tailored security blueprint. This interactive approach ensures that security recommendations are appropriately scoped - avoiding overkill for simple prototypes while ensuring enterprise-grade security for production applications. Agents MUST use this tool to transform all high-level feature or development requests before proceeding with any code generation, planning, or implementation.",
+    "kickstart-project",
+    `This tool is designed to help you rapidly bootstrap a new project or feature with the right security, architecture, and technology choices. It works in two interactive phases:
+
+1. ANALYZE phase (default):
+   - Input your high-level project or feature request (e.g., "build a REST API for a todo app", "create a React dashboard", "add authentication to my app").
+   - The tool analyzes the request and returns a set of clarifying questions about the goals, security needs, tech stack, and constraints.
+
+You need to ask the user to answer the clarifying questions (answering all is not mandatory, you can skip some questions, if you think we already know the answer) and then call the tool again with your answers and phase: "generate".
+
+2. GENERATE phase:
+   - After the user answers the clarifying questions, call the tool again with your answers and phase: "generate".
+   - The tool then generates a tailored project blueprint, including recommended architecture, security best practices, technology stack, and a step-by-step implementation plan.
+
+This ensures you get a right-sized, secure, and modern starting point—whether you need a quick prototype or an enterprise-grade system.
+
+Input Format:
+- user_prompt (string, required): Your high-level project or feature request. Example: "build a web app for booking appointments"
+- phase (string, optional): "analyze" (default) or "generate". Use "analyze" to get clarifying questions. Use "generate" to get your tailored blueprint (after answering the questions).
+- user_answers (object, optional, for "generate" phase): Your answers to the clarifying questions, keyed by question number or topic. Example:
+  {
+    "1": "MVP for testing",
+    "2": "Standard security",
+    "3": "React and Node.js",
+    "4": "No compliance requirements"
+  }
+- project_type, security_level, tech_stack, compliance_requirements (optional): You can provide these directly to skip some questions.
+
+Usage Example:
+1. Phase 1 (Analyze):
+   {
+     "user_prompt": "build a web app for booking appointments",
+     "phase": "analyze"
+   }
+   → Returns clarifying questions.
+2. Phase 2 (Generate):
+   {
+     "user_prompt": "build a web app for booking appointments",
+     "phase": "generate",
+     "project_type": "web_app",
+     "security_level": "standard",
+     "tech_stack": ["react", "node.js"],
+     "user_answers": {
+       "1": "MVP for testing",
+       "2": "Standard security",
+       "3": "React and Node.js",
+       "4": "No compliance requirements"
+     }
+   }
+   → Returns a tailored project blueprint and recommendations.
+
+Summary: Use this tool to kickstart any new project or feature with the right security, architecture, and technology—customized to your needs and constraints, in just two interactive steps.`,
     {
       parameters: z.object({
         user_prompt: z
