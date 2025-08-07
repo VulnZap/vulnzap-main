@@ -41,6 +41,7 @@ export const config = {
 
   // API endpoints
   api: {
+    engine: "https://engine.vulnzap.com",
     baseUrl: "https://vulnzap-server.vercel.app",
     addOn: "/api/v1",
     enhanced: "/api/v2",

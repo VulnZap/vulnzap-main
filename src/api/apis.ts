@@ -2,11 +2,9 @@ import { v4 } from 'uuid';
 import config from '../config/config.js';
 import { getKey } from './auth.js';
 
-const API_BASE_URL = config.api.baseUrl + config.api.addOn;
-
 export async function checkHealth() {
   try {
-    const response = await fetch(`${API_BASE_URL}/vulnzap/health`, {
+    const response = await fetch(`${config.api.engine}/health`, {
       method: 'GET',
     });
     if (response.ok) {
@@ -48,7 +46,7 @@ export interface UserProfile {
 export async function getUserProfile(): Promise<UserProfile | null> {
   try {
     const apiKey = await getKey();
-    const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
+    const response = await fetch(`${config.api.engine}/api/user/profile`, {
       method: 'GET',
       headers: {
         'x-api-key': apiKey,
@@ -72,7 +70,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 export async function getUserUsage(): Promise<{ current: number; limit: number; period: string } | null> {
   try {
     const apiKey = await getKey();
-    const response = await fetch(`${API_BASE_URL}/vulnzap/user/usage`, {
+    const response = await fetch(`${config.api.engine}/vulnzap/user/usage`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
