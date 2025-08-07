@@ -2,39 +2,63 @@ import { UserProfile } from '../api/apis.js';
 
 // Mock user data for testing personalized CLI features
 export const mockUserProfile: UserProfile = {
-  name: 'Alex Johnson',
+  id: '123',
   email: 'alex@example.com',
-  tier: 'free',
-  usage: {
-    current: 97,
-    limit: 100,
-    period: 'month'
+  username: 'Alex Johnson',
+  createdAt: '2021-01-01',
+  lastLogin: '2021-01-01',
+  isActive: true,
+  usageBased: true,
+  subscription: {
+    tier: 'free',
+    status: 'active',
+    current_period_start: '2021-01-01',
+    current_period_end: '2021-01-31',
+    line_scans_limit: 25000
   },
-  features: ['vulnerability-scanning', 'basic-reports']
+  apiUsage: {
+    lineScans: 20000
+  }
 };
 
 export const mockProUserProfile: UserProfile = {
-  name: 'Sarah Chen',
-  email: 'sarah@company.com',
-  tier: 'pro',
-  usage: {
-    current: 245,
-    limit: 1000,
-    period: 'month'
+  id: '123',
+  email: 'alex@example.com',
+  username: 'Alex Johnson',
+  createdAt: '2021-01-01',
+  lastLogin: '2021-01-01',
+  isActive: true,
+  usageBased: true,
+  subscription: {
+    tier: 'pro',
+    status: 'active',
+    current_period_start: '2021-01-01',
+    current_period_end: '2021-01-31',
+    line_scans_limit: 250000
   },
-  features: ['vulnerability-scanning', 'advanced-reports', 'team-collaboration', 'priority-support']
+  apiUsage: {
+    lineScans: 245000
+  }
 };
 
 export const mockEnterpriseUserProfile: UserProfile = {
-  name: 'David Kumar',
-  email: 'david@enterprise.com',
-  tier: 'enterprise',
-  usage: {
-    current: 1250,
-    limit: 10000,
-    period: 'month'
+  id: '123',
+  email: 'alex@example.com',
+  username: 'Alex Johnson',
+  createdAt: '2021-01-01',
+  lastLogin: '2021-01-01',
+  isActive: true,
+  usageBased: true,
+  subscription: {
+    tier: 'enterprise',
+    status: 'active',
+    current_period_start: '2021-01-01',
+    current_period_end: '2021-01-31',
+    line_scans_limit: 1000000
   },
-  features: ['vulnerability-scanning', 'advanced-reports', 'team-collaboration', 'priority-support', 'custom-integrations', 'dedicated-support']
+  apiUsage: {
+    lineScans: 125000
+  }
 };
 
 // Function to enable mock mode (for testing)

@@ -26,24 +26,32 @@ export async function checkHealth() {
 }
 
 export interface UserProfile {
-  name: string;
+  id: string;
   email: string;
-  tier: 'free' | 'pro' | 'enterprise';
-  usage: {
-    current: number;
-    limit: number;
-    period: string; // e.g., "monthly"
-  };
-  features: string[];
+  username: string;
+  createdAt: string;
+  lastLogin: string;
+  isActive: boolean;
+  usageBased: boolean;
+  subscription: {
+    tier: string;
+    status: string;
+    current_period_start: string;
+    current_period_end: string;
+    line_scans_limit: number;
+  },
+  apiUsage: {
+    lineScans: number
+  }
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
   try {
     const apiKey = await getKey();
-    const response = await fetch(`${API_BASE_URL}/vulnzap/user/profile`, {
+    const response = await fetch(`${API_BASE_URL}/api/user/profile`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
         'Content-Type': 'application/json',
       },
     });

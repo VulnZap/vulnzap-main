@@ -82,28 +82,28 @@ export async function displayUserWelcome(): Promise<void> {
     spacing.line();
     
     // Welcome message
-    const firstName = profile.name.split(' ')[0];
-    console.log(typography.subtitle(`Welcome back, ${firstName}`));
+    const firstName = profile.username;
+    console.log(typography.subtitle(`Good to see you here, ${firstName}`));
     
     // Tier and usage in a clean line
-    const tierDisplay = getTierDisplay(profile.tier);
+    const tierDisplay = getTierDisplay(profile.subscription.tier);
     const { display: usageDisplay, shouldShowFomo } = getUsageDisplay(
-      profile.usage.current,
-      profile.usage.limit,
-      profile.usage.period
+      profile.apiUsage.lineScans,
+      profile.subscription.line_scans_limit,
+      'month'
     );
     
     console.log(`${tierDisplay} • ${usageDisplay}`);
     
     // FOMO message if needed
     if (shouldShowFomo) {
-      const fomoMessage = getFomoMessage(profile.tier, profile.usage.current, profile.usage.limit);
+      const fomoMessage = getFomoMessage(profile.subscription.tier, profile.apiUsage.lineScans, profile.subscription.line_scans_limit);
       if (fomoMessage) {
         spacing.line();
         console.log(fomoMessage);
       }
     }
-    
+
     spacing.line();
     
   } catch (error) {
@@ -124,23 +124,23 @@ export async function displayUserStatus(): Promise<void> {
     console.log(typography.info('Account Information'));
     spacing.line();
     
-    console.log(typography.muted(`  Name: ${profile.name}`));
+    console.log(typography.muted(`  Name: ${profile.username}`));
     console.log(typography.muted(`  Email: ${profile.email}`));
-    console.log(typography.muted(`  Tier: ${profile.tier.charAt(0).toUpperCase() + profile.tier.slice(1)}`));
+    console.log(typography.muted(`  Tier: ${profile.subscription.tier.charAt(0).toUpperCase() + profile.subscription.tier.slice(1)}`));
     
     spacing.line();
     console.log(typography.info('Usage This Month'));
     spacing.line();
     
-    const percentage = Math.round((profile.usage.current / profile.usage.limit) * 100);
-    const remaining = profile.usage.limit - profile.usage.current;
+    const percentage = Math.round((profile.apiUsage.lineScans / profile.subscription.line_scans_limit) * 100);
+    const remaining = profile.subscription.line_scans_limit - profile.apiUsage.lineScans;
     
-    console.log(typography.muted(`  Scans used: ${profile.usage.current} of ${profile.usage.limit} (${percentage}%)`));
+    console.log(typography.muted(`  Scans used: ${profile.apiUsage.lineScans} of ${profile.subscription.line_scans_limit} (${percentage}%)`));
     console.log(typography.muted(`  Remaining: ${remaining} scans`));
     
     // Progress bar
     const barLength = 20;
-    const filledLength = Math.round((profile.usage.current / profile.usage.limit) * barLength);
+    const filledLength = Math.round((profile.apiUsage.lineScans / profile.subscription.line_scans_limit) * barLength);
     const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
     
     let barColor;
@@ -152,11 +152,11 @@ export async function displayUserStatus(): Promise<void> {
     console.log(typography.muted(`  Progress: ${barColor(bar)} ${percentage}%`));
     
     // FOMO message
-    const fomoMessage = getFomoMessage(profile.tier, profile.usage.current, profile.usage.limit);
+    const fomoMessage = getFomoMessage(profile.subscription.tier, profile.apiUsage.lineScans, profile.subscription.line_scans_limit);
     if (fomoMessage) {
       spacing.section();
       console.log(fomoMessage);
-      if (profile.tier.toLowerCase() === 'free') {
+      if (profile.subscription.tier.toLowerCase() === 'free') {
         console.log(typography.muted('Visit vulnzap.com/pricing to upgrade'));
       }
     }

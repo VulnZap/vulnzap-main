@@ -7,13 +7,10 @@ import { startMcpServer, checkVulnerability, checkBatch } from './index.js';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import open from 'open';
-import { v4 as uuidv4 } from 'uuid';
 import os from 'os';
 import fs from 'fs';
 import * as api from './api/apis.js';
 import * as auth from './api/auth.js';
-import { checkInit } from './utils/checks.js';
 import config from './config/config.js';
 import { saveKey, getKey } from './api/auth.js';
 import inquirer from 'inquirer';
@@ -121,7 +118,7 @@ program
     displayBanner();
     console.log(typography.title('Setup Configuration'));
     spacing.line();
-    
+
     try {
       // Check if API key already exists
       let existingKey;
@@ -134,7 +131,7 @@ program
       if (existingKey) {
         console.log(typography.muted('  An API key is already configured'));
         spacing.line();
-        
+
         const { confirm } = await customPrompts.prompt([
           {
             type: 'confirm',
@@ -146,7 +143,7 @@ program
 
         if (!confirm) {
           console.log(typography.muted('  Configuration unchanged'));
-          
+
           if (options.ide) {
             spacing.section();
             console.log(typography.info('Configuring IDE integration...'));
@@ -186,10 +183,10 @@ program
 
       const spinner = createSpinner('Configuring authentication...');
       spinner.start();
-      
+
       await saveKey(apiKey);
       spinner.succeed(typography.success('Authentication configured'));
-      
+
       // Show personalized welcome message
       await displayUserWelcome();
 
@@ -218,7 +215,7 @@ program
       console.log(typography.muted('Setup cancelled. Run `vulnzap init` again anytime.'));
       process.exit(0);
     };
-    
+
     process.on('SIGINT', handleExit);
     process.on('SIGTERM', handleExit);
 
@@ -244,7 +241,7 @@ program
 
       if (welcomeChoice === 'visit') {
         spacing.line();
-        console.log(typography.info('Visit vulnzap.com to learn more'));
+        console.log(typography.info(`Visit 'https://vulnzap.com' to learn more`));
         process.exit(0);
       }
 
@@ -259,7 +256,7 @@ program
       if (existingKey) {
         console.log(typography.success('Authentication configured'));
         spacing.line();
-        
+
         const { replaceKey } = await customPrompts.prompt([
           {
             type: 'confirm',
@@ -282,18 +279,18 @@ program
         console.log(typography.info('Setting up authentication'));
         console.log(typography.muted('  You will be redirected to your browser for secure login'));
         spacing.line();
-        
+
         const spinner = createSpinner('Initializing authentication...');
         spinner.start();
 
         try {
           spinner.text = 'Opening browser for authentication...';
-          
+
           const { success, error } = await auth.login("login");
 
           if (success) {
             spinner.succeed(typography.success('Authentication successful'));
-            
+
             // Show personalized welcome message
             await displayUserWelcome();
           } else {
@@ -324,7 +321,7 @@ program
       spacing.section();
       console.log(typography.info('Setting up IDE integration'));
       spacing.line();
-      
+
       const { selectedIde } = await customPrompts.prompt([
         {
           type: 'list',
@@ -334,15 +331,90 @@ program
             { name: 'Cursor IDE', value: 'cursor' },
             { name: 'Windsurf IDE', value: 'windsurf' },
             { name: 'Cline (VS Code Extension)', value: 'cline' },
+            { name: 'VS Code', value: 'vscode' },
             { name: 'Other (Manual Configuration)', value: 'other' }
           ],
           default: 'cursor'
         }
       ]);
 
+      // Step 4.1: Handle VSCode extension installation if VSCode is selected
+      if (selectedIde === 'vscode') {
+        spacing.line();
+        
+        // Check if VS Code CLI is available
+        try {
+          execSync('code --version', { stdio: 'pipe' });
+        } catch (error) {
+          console.log(typography.warning('VS Code CLI not found. Please ensure VS Code is installed and added to PATH.'));
+          console.log(typography.muted('To add VS Code to PATH:'));
+          console.log(typography.muted('  1. Open VS Code'));
+          console.log(typography.muted('  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)'));
+          console.log(typography.muted('  3. Type "Shell Command: Install \'code\' command in PATH"'));
+          console.log(typography.muted('  4. Run the command and restart your terminal'));
+          spacing.section();
+        }
+
+        const { installExtension } = await customPrompts.prompt([
+          {
+            type: 'confirm',
+            name: 'installExtension',
+            message: 'Would you like to install the VulnZap VS Code extension?',
+            default: true
+          }
+        ]);
+
+        if (installExtension) {
+          const extensionSpinner = createSpinner('Installing VulnZap VS Code extension...');
+          extensionSpinner.start();
+          
+          try {
+            // Install the VulnZap extension
+            const extensionId = 'vulnzap.vulnzap';
+            
+            try {
+              execSync(`code --install-extension ${extensionId}`, { stdio: 'pipe' });
+              extensionSpinner.succeed(typography.success('VulnZap extension installed successfully'));
+            } catch (installError) {
+              extensionSpinner.warn(typography.warning('VulnZap extension not yet available in marketplace'));
+              console.log(typography.info('Manual installation will be available soon.'));
+              console.log(typography.muted('Visit https://vulnzap.com/vscode for updates'));
+              console.log(typography.muted('Or install the extension manually from the marketplace'));
+            }
+
+            // Display helpful information about the extension
+            spacing.section();
+            console.log(typography.info('VS Code Extension Setup Complete'));
+            console.log(typography.muted('  Extension: VulnZap Security Scanner'));
+            console.log(typography.muted('  Auto-scan: Enabled for supported files'));
+            console.log(typography.muted('  API Integration: Configured with your account'));
+            spacing.section();
+            console.log(typography.info('To use the extension:'));
+            console.log(typography.muted('  1. Open a project in VS Code'));
+            console.log(typography.muted('  2. Install dependencies or create new files'));
+            console.log(typography.muted('  3. VulnZap will automatically scan for vulnerabilities'));
+            console.log(typography.muted('  4. Check the Problems panel for security issues'));
+            
+          } catch (error: any) {
+            extensionSpinner.fail('Failed to install VS Code extension');
+            console.error(typography.error('Error:'), error.message);
+            console.log(typography.muted('Manual installation instructions:'));
+            console.log(typography.muted('  1. Open VS Code'));
+            console.log(typography.muted('  2. Go to Extensions (Ctrl+Shift+X)'));
+            console.log(typography.muted('  3. Search for "VulnZap"'));
+            console.log(typography.muted('  4. Install the extension'));
+          }
+        } else {
+          console.log(typography.info('VS Code extension installation skipped'));
+          console.log(typography.muted('You can install it later from the VS Code Extensions marketplace'));
+        }
+
+        spacing.section();
+      }
+
       const ideSpinner = createSpinner(`Configuring ${selectedIde} integration...`);
       ideSpinner.start();
-      
+
       try {
         await connectIDE(selectedIde);
         ideSpinner.succeed(typography.success(`${selectedIde} integration configured`));
@@ -352,14 +424,14 @@ program
         console.log(typography.title('Setup Complete'));
         console.log(typography.subtitle('VulnZap is now protecting your AI-generated code'));
         spacing.section();
-        
+
         console.log(typography.info('What\'s next:'));
         console.log(typography.muted('  • Start coding - vulnerabilities will be caught automatically'));
         console.log(typography.muted('  • View detailed logs at vulnzap.com/dashboard/logs'));
         console.log(typography.muted('  • Run `vulnzap check <package>` to manually scan packages'));
         console.log(typography.muted('  • Run `vulnzap status` to verify everything is working'));
         spacing.section();
-        
+
         console.log(typography.muted('Need help? Visit vulnzap.com/docs or run `vulnzap help`'));
       } catch (error: any) {
         ideSpinner.fail(`Failed to configure ${selectedIde} integration`);
@@ -463,29 +535,29 @@ program
     try {
       await checkHealth();
       spinner.succeed(typography.success('Server is healthy'));
-      
+
       // Check authentication
       spacing.line();
       const authSpinner = createSpinner('Checking authentication...');
       authSpinner.start();
-      
+
       try {
         await getKey();
         authSpinner.succeed(typography.success('Authentication configured'));
-        
+
         // Show user profile information
         spacing.section();
         await displayUserStatus();
-        
+
       } catch (error) {
         authSpinner.fail(typography.warning('Authentication not configured'));
         spacing.line();
         console.log(typography.muted('Run `vulnzap setup` to configure authentication'));
       }
-      
+
       spacing.section();
       console.log(typography.info('System ready for secure development'));
-      
+
     } catch (error: any) {
       spinner.fail(typography.warning('Server is offline'));
       spacing.line();
@@ -504,13 +576,13 @@ program
     displayBanner();
     console.log(typography.title('Security Analysis'));
     spacing.line();
-    
+
     let packageName, packageVersion, packageEcosystem;
-    
+
     // Parse package input with improved logic
     const packageFormat = /^(npm|pip|go|rust|maven|gradle|composer|nuget|pypi):([^@]+)@(.+)$/;
     const match = packageInput.match(packageFormat);
-    
+
     if (match) {
       // Format: ecosystem:package-name@version (preferred format)
       [, packageEcosystem, packageName, packageVersion] = match;
@@ -534,15 +606,15 @@ program
 
     // Validate that we have all required components
     const missingComponents = [];
-    
+
     if (!packageName || packageName.trim() === '') {
       missingComponents.push('package name');
     }
-    
+
     if (!packageVersion || packageVersion.trim() === '') {
       missingComponents.push('package version');
     }
-    
+
     if (!packageEcosystem || packageEcosystem.trim() === '') {
       missingComponents.push('package ecosystem');
     }
@@ -575,98 +647,98 @@ program
 
     console.log(typography.muted(`  Analyzing ${packageEcosystem}:${packageName}@${packageVersion}`));
     spacing.line();
-    
+
     const spinner = createSpinner('Scanning for vulnerabilities...');
     spinner.start();
 
-          try {
-        await checkHealth();
-        const result = await checkVulnerability(packageEcosystem, packageName, packageVersion, {
-          useCache: options.cache,
-          useAi: options.ai
-        });
-        
-        if (result.fromCache) {
-          spinner.succeed(typography.warning('Analysis complete (using cached result)'));
-          console.log(typography.muted('  Result may be up to 5 days old'));
-        } else {
-          spinner.succeed(typography.success('Analysis complete'));
-          
-          // Show usage info after successful scan (but not for cached results)
-          await displayUserWelcome();
-        }
-        
-        spacing.line();
+    try {
+      await checkHealth();
+      const result = await checkVulnerability(packageEcosystem, packageName, packageVersion, {
+        useCache: options.cache,
+        useAi: options.ai
+      });
 
-        if (result.error) {
-          console.error(typography.error('Analysis failed:'), result.error);
-          return;
+      if (result.fromCache) {
+        spinner.succeed(typography.warning('Analysis complete (using cached result)'));
+        console.log(typography.muted('  Result may be up to 5 days old'));
+      } else {
+        spinner.succeed(typography.success('Analysis complete'));
+
+        // Show usage info after successful scan (but not for cached results)
+        await displayUserWelcome();
+      }
+
+      spacing.line();
+
+      if (result.error) {
+        console.error(typography.error('Analysis failed:'), result.error);
+        return;
+      }
+
+      if (result.isUnknown) {
+        console.log(typography.warning('Result: Unknown'));
+        console.log(typography.muted(`  ${result.message}`));
+        if (result.sources && result.sources.length > 0) {
+          console.log(typography.muted(`  Sources checked: ${result.sources.join(', ')}`));
         }
-        
-        if (result.isUnknown) {
-          console.log(typography.warning('Result: Unknown'));
-          console.log(typography.muted(`  ${result.message}`));
-          if (result.sources && result.sources.length > 0) {
-            console.log(typography.muted(`  Sources checked: ${result.sources.join(', ')}`));
-          }
-          return;
+        return;
+      }
+
+      if (!result.isVulnerable) {
+        console.log(typography.success('Result: Secure'));
+        console.log(typography.muted(`  ${packageName}@${packageVersion} has no known vulnerabilities`));
+        if (result.sources && result.sources.length > 0) {
+          console.log(typography.muted(`  Sources: ${result.sources.join(', ')}`));
         }
-        
-        if (!result.isVulnerable) {
-          console.log(typography.success('Result: Secure'));
-          console.log(typography.muted(`  ${packageName}@${packageVersion} has no known vulnerabilities`));
-          if (result.sources && result.sources.length > 0) {
-            console.log(typography.muted(`  Sources: ${result.sources.join(', ')}`));
-          }
+        spacing.line();
+        return;
+      }
+      if (result.isVulnerable) {
+        console.log(typography.error('Result: Vulnerable'));
+        console.log(typography.muted(`  ${packageName}@${packageVersion} has security vulnerabilities`));
+        spacing.section();
+
+        if (result.processedVulnerabilities && result.processedVulnerabilities.summary) {
+          console.log(typography.info('AI Analysis'));
           spacing.line();
-          return;
-        }
-              if (result.isVulnerable) {
-          console.log(typography.error('Result: Vulnerable'));
-          console.log(typography.muted(`  ${packageName}@${packageVersion} has security vulnerabilities`));
-          spacing.section();
-          
-          if (result.processedVulnerabilities && result.processedVulnerabilities.summary) {
-            console.log(typography.info('AI Analysis'));
-            spacing.line();
-            console.log(typography.subtitle('Summary'));
-            console.log(typography.muted(`  ${result.processedVulnerabilities.summary}`));
-            spacing.line();
-            console.log(typography.subtitle('Impact'));
-            console.log(typography.muted(`  ${result.processedVulnerabilities.impact}`));
-            spacing.line();
-            console.log(typography.subtitle('Recommendations'));
-            result.processedVulnerabilities.recommendations.forEach((recommendation: string) => {
-              console.log(typography.muted(`  • ${recommendation}`));
-            });
-            spacing.section();
-          }
-          
-          if (result.sources && result.sources.length > 0) {
-            console.log(typography.muted(`Sources: ${result.sources.join(', ')}`));
-            spacing.line();
-          }
-          
-          console.log(typography.info('Vulnerability Details'));
+          console.log(typography.subtitle('Summary'));
+          console.log(typography.muted(`  ${result.processedVulnerabilities.summary}`));
           spacing.line();
-          // Display vulnerability details
-          result.advisories?.forEach((advisory: { title: string; severity: string; description: string; references?: string[] }) => {
-            console.log(typography.warning(`• ${advisory.title}`));
-            console.log(typography.muted(`  Severity: ${advisory.severity}`));
-            console.log(typography.muted(`  ${advisory.description}`));
-            if (advisory.references?.length) {
-              console.log(typography.muted(`  References: ${advisory.references.join(', ')}`));
-            }
-            spacing.line();
+          console.log(typography.subtitle('Impact'));
+          console.log(typography.muted(`  ${result.processedVulnerabilities.impact}`));
+          spacing.line();
+          console.log(typography.subtitle('Recommendations'));
+          result.processedVulnerabilities.recommendations.forEach((recommendation: string) => {
+            console.log(typography.muted(`  • ${recommendation}`));
           });
-          
-          // Suggest fixed version if available
-          if (result.fixedVersions && result.fixedVersions.length > 0) {
-            console.log(typography.info('Recommended Fix'));
-            console.log(typography.accent(`  Upgrade to ${result.fixedVersions[0]} or later`));
-            spacing.line();
+          spacing.section();
+        }
+
+        if (result.sources && result.sources.length > 0) {
+          console.log(typography.muted(`Sources: ${result.sources.join(', ')}`));
+          spacing.line();
+        }
+
+        console.log(typography.info('Vulnerability Details'));
+        spacing.line();
+        // Display vulnerability details
+        result.advisories?.forEach((advisory: { title: string; severity: string; description: string; references?: string[] }) => {
+          console.log(typography.warning(`• ${advisory.title}`));
+          console.log(typography.muted(`  Severity: ${advisory.severity}`));
+          console.log(typography.muted(`  ${advisory.description}`));
+          if (advisory.references?.length) {
+            console.log(typography.muted(`  References: ${advisory.references.join(', ')}`));
           }
-                }
+          spacing.line();
+        });
+
+        // Suggest fixed version if available
+        if (result.fixedVersions && result.fixedVersions.length > 0) {
+          console.log(typography.info('Recommended Fix'));
+          console.log(typography.accent(`  Upgrade to ${result.fixedVersions[0]} or later`));
+          spacing.line();
+        }
+      }
     } catch (error: any) {
       if (error.message === 'SERVER_DOWN') {
         spinner.stop();
@@ -708,7 +780,7 @@ program
                 console.log(`- ${recommendation}`);
               });
             }
-            
+
             if (cached.sources && cached.sources.length > 0) {
               console.log(`  Sources: ${cached.sources.join(', ')}`);
             }
@@ -747,7 +819,7 @@ program
     displayBanner();
     console.log(typography.title('IDE Integration'));
     spacing.line();
-    
+
     // Prompt for IDE if not provided
     if (!options.ide) {
       const { ide } = await customPrompts.prompt([{
@@ -766,7 +838,7 @@ program
 
     const spinner = createSpinner(`Configuring ${options.ide} integration...`);
     spinner.start();
-    
+
     try {
       await connectIDE(options.ide);
       spinner.succeed(typography.success('IDE integration configured'));
@@ -787,23 +859,23 @@ program
     displayBanner();
     console.log(typography.title('Account Information'));
     spacing.section();
-    
+
     try {
       // Show detailed user status
       await displayUserStatus();
-      
+
       spacing.section();
       console.log(typography.info('Dashboard Access'));
       console.log(typography.muted('  Visit your dashboard to manage account settings:'));
       console.log(typography.accent('  https://vulnzap.com/dashboard'));
       spacing.section();
-      
+
       console.log(typography.info('Available Features'));
       console.log(typography.muted('  • API key management'));
       console.log(typography.muted('  • Scan history and analytics'));
       console.log(typography.muted('  • Team collaboration tools'));
       console.log(typography.muted('  • Integration settings'));
-      
+
     } catch (error: any) {
       console.error(typography.error('Error:'), error.message);
       process.exit(1);
@@ -819,7 +891,7 @@ program
   .action(async (options) => {
     try {
       const spinner = ora('Checking project initialization...').start();
-      
+
       // Check if VulnZap is initialized in the current directory
       const vulnzapDir = path.join(process.cwd(), '.vulnzap');
       if (!fs.existsSync(vulnzapDir)) {
@@ -829,10 +901,10 @@ program
       }
 
       spinner.text = 'Scanning packages...';
-      
+
       // Extract packages from current directory
       const packages = extractPackagesFromDirectory(process.cwd(), options.ecosystem);
-      
+
       if (packages.length === 0) {
         spinner.fail('No packages found to scan');
         console.log(chalk.yellow('No package manager files (package.json, requirements.txt, etc.) found in the directory'));
@@ -840,28 +912,28 @@ program
       }
 
       spinner.text = `Found ${packages.length} packages. Scanning for vulnerabilities...`;
-      
+
       // Perform batch scan
       const results = await batchScan(packages, {
         useCache: true,
         useAi: true
       });
-      
+
       spinner.succeed('Scan completed');
-      
+
       // Format and display results
       console.log('\nScan Results:');
       console.log('-------------');
-      
+
       const vulnerableCount = results.results.filter(r => r.status === 'vulnerable').length;
       const safeCount = results.results.filter(r => r.status === 'safe').length;
       const errorCount = results.results.filter(r => r.status === 'error').length;
-      
+
       console.log(`Total packages: ${packages.length}`);
       console.log(`Vulnerable: ${vulnerableCount}`);
       console.log(`Safe: ${safeCount}`);
       console.log(`Errors: ${errorCount}`);
-      
+
       // Save results to file if specified
       if (options.output) {
         const outputPath = path.resolve(options.output);
@@ -873,7 +945,7 @@ program
         fs.writeFileSync(defaultOutputPath, JSON.stringify(results, null, 2));
         console.log(`\nResults saved to: ${defaultOutputPath}`);
       }
-      
+
       // Display detailed results
       if (vulnerableCount > 0) {
         console.log('\nVulnerable Packages:');
@@ -883,7 +955,7 @@ program
           .forEach(result => {
             console.log(`\n${result.package.packageName}@${result.package.version} (${result.package.ecosystem})`);
             console.log(result.message);
-            
+
             if (result.vulnerabilities) {
               result.vulnerabilities.forEach(vuln => {
                 console.log(`\n- ${vuln.title} (${vuln.severity})`);
@@ -893,7 +965,7 @@ program
                 }
               });
             }
-            
+
             if (result.remediation) {
               console.log('\nRemediation:');
               console.log(`- Update to ${result.remediation.recommendedVersion}`);
@@ -907,7 +979,7 @@ program
             }
           });
       }
-      
+
     } catch (error: any) {
       console.error(chalk.red('Error:'), error.message);
       process.exit(1);
@@ -923,39 +995,39 @@ program
     displayBanner();
     console.log(typography.title('Personalized CLI Demo'));
     spacing.section();
-    
+
     // Create mock profile for demo
     const mockProfile = getMockProfile(options.tier as 'free' | 'pro' | 'enterprise');
-    
+
     try {
       console.log(typography.info(`Demonstrating ${options.tier} tier experience:`));
       spacing.line();
-      
+
       // Manually create the displays with mock data
-      const firstName = mockProfile.name.split(' ')[0];
+      const firstName = mockProfile.username;
       console.log(typography.subtitle(`Welcome back, ${firstName}`));
-      
+
       // Tier and usage display
-      const tierDisplay = mockProfile.tier === 'free' ? typography.muted('Free') :
-                         mockProfile.tier === 'pro' ? typography.accent('Pro') :
-                         typography.success('Enterprise');
-      
-      const remaining = mockProfile.usage.limit - mockProfile.usage.current;
-      const percentage = (mockProfile.usage.current / mockProfile.usage.limit) * 100;
-      
+      const tierDisplay = mockProfile.subscription.tier === 'free' ? typography.muted('Free') :
+        mockProfile.subscription.tier === 'pro' ? typography.accent('Pro') :
+          typography.success('Enterprise');
+
+      const remaining = mockProfile.subscription.line_scans_limit - mockProfile.apiUsage.lineScans;
+      const percentage = (mockProfile.apiUsage.lineScans / mockProfile.subscription.line_scans_limit) * 100;
+
       let usageDisplay;
       if (percentage >= 90) {
-        usageDisplay = typography.error(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+        usageDisplay = typography.error(`${remaining} scans remaining this month`);
       } else if (percentage >= 75) {
-        usageDisplay = typography.warning(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+        usageDisplay = typography.warning(`${remaining} scans remaining this month`);
       } else {
-        usageDisplay = typography.muted(`${remaining} scans remaining this ${mockProfile.usage.period}`);
+        usageDisplay = typography.muted(`${remaining} scans remaining this month`);
       }
-      
+
       console.log(`${tierDisplay} • ${usageDisplay}`);
-      
+
       // FOMO message
-      if (mockProfile.tier === 'free' && percentage >= 75) {
+      if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
         spacing.line();
         if (percentage >= 90) {
           console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
@@ -963,39 +1035,39 @@ program
           console.log(typography.muted('Consider upgrading to Pro to avoid hitting limits'));
         }
       }
-      
+
       spacing.section();
       console.log(typography.subtitle('Full Status View:'));
       spacing.line();
-      
+
       console.log(typography.info('Account Information'));
       spacing.line();
-      console.log(typography.muted(`  Name: ${mockProfile.name}`));
+      console.log(typography.muted(`  Name: ${mockProfile.username}`));
       console.log(typography.muted(`  Email: ${mockProfile.email}`));
-      console.log(typography.muted(`  Tier: ${mockProfile.tier.charAt(0).toUpperCase() + mockProfile.tier.slice(1)}`));
-      
+      console.log(typography.muted(`  Tier: ${mockProfile.subscription.tier.charAt(0).toUpperCase() + mockProfile.subscription.tier.slice(1)}`));
+
       spacing.line();
       console.log(typography.info('Usage This Month'));
       spacing.line();
-      
+
       const percentageRounded = Math.round(percentage);
-      console.log(typography.muted(`  Scans used: ${mockProfile.usage.current} of ${mockProfile.usage.limit} (${percentageRounded}%)`));
+      console.log(typography.muted(`  Scans used: ${mockProfile.apiUsage.lineScans} of ${mockProfile.subscription.line_scans_limit} (${percentageRounded}%)`));
       console.log(typography.muted(`  Remaining: ${remaining} scans`));
-      
+
       // Progress bar
       const barLength = 20;
-      const filledLength = Math.round((mockProfile.usage.current / mockProfile.usage.limit) * barLength);
+      const filledLength = Math.round((mockProfile.apiUsage.lineScans / mockProfile.subscription.line_scans_limit) * barLength);
       const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
-      
+
       let barColor;
       if (percentage >= 90) barColor = chalk.red;
       else if (percentage >= 75) barColor = chalk.yellow;
       else if (percentage >= 50) barColor = chalk.cyan;
       else barColor = chalk.green;
-      
+
       console.log(typography.muted(`  Progress: ${barColor(bar)} ${percentageRounded}%`));
-      
-      if (mockProfile.tier === 'free' && percentage >= 75) {
+
+      if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
         spacing.section();
         if (percentage >= 90) {
           console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
@@ -1004,7 +1076,7 @@ program
         }
         console.log(typography.muted('Visit vulnzap.com/pricing to upgrade'));
       }
-      
+
     } catch (error: any) {
       console.error(typography.error('Demo failed:'), error.message);
     }
@@ -1016,7 +1088,7 @@ program
   .description('Display help information')
   .action(() => {
     displayBanner();
-    
+
     console.log(chalk.cyan('Quick Start:'));
     console.log('  npx vulnzap init          Complete onboarding (recommended for new users)');
     console.log('');
@@ -1041,7 +1113,7 @@ program
     console.log('  Support: https://vulnzap.com/support');
     console.log('  Dashboard: https://vulnzap.com/dashboard');
     console.log('');
-    
+
     // Also show the default commander help for detailed options
     console.log(chalk.gray('Detailed command options:'));
     program.help();
@@ -1068,6 +1140,8 @@ async function connectIDE(ide: string) {
   logStream.write(`VulnZap connect command executed for ${ide} at ${new Date().toISOString()}\n`);
   logStream.end();
 
+  const apiKey = await getKey();
+
   if (ide === 'cursor') {
     // Ensure the .cursor directory exists
     const cursorDir = path.join(os.homedir(), '.cursor');
@@ -1075,12 +1149,12 @@ async function connectIDE(ide: string) {
       fs.mkdirSync(cursorDir, { recursive: true });
       console.log(chalk.yellow('Created .cursor directory'));
     }
-    
+
     // Define the MCP config file path
     const cursorMcpConfigLocation = path.join(cursorDir, 'mcp.json');
-    
+
     // Read existing config or create empty object
-    let cursorMcpConfig: { mcpServers?: any; [key: string]: any } = {};
+    let cursorMcpConfig: { mcpServers?: any;[key: string]: any } = {};
     if (fs.existsSync(cursorMcpConfigLocation)) {
       try {
         const configData = fs.readFileSync(cursorMcpConfigLocation, 'utf8');
@@ -1098,18 +1172,21 @@ async function connectIDE(ide: string) {
       cursorMcpConfig.mcpServers = {};
     }
 
+
     // Add VulnZap configuration
     cursorMcpConfig.mcpServers.VulnZap = {
-      command: "vulnzap",
-      args: ["secure", "--ide", "cursor", "--port", "3456"]
+      url: "https://vulnzap.com/mcp/sse",
+      headers: {
+        "x-api-key": apiKey
+      }
     };
 
     // Write the config file with proper permissions
     const configContent = JSON.stringify(cursorMcpConfig, null, 2);
-    fs.writeFileSync(cursorMcpConfigLocation, configContent, { 
+    fs.writeFileSync(cursorMcpConfigLocation, configContent, {
       encoding: 'utf8'
     });
-    
+
     console.log(typography.success('Configuration updated successfully'));
 
     // Display helpful information
@@ -1150,12 +1227,14 @@ async function connectIDE(ide: string) {
       windsurfMcpConfig.mcpServers = {};
     }
     windsurfMcpConfig.mcpServers.VulnZap = {
-      command: 'vulnzap',
-      args: ['secure', '--ide', 'windsurf', '--port', '3456']
+      url: "https://vulnzap.com/mcp/sse",
+      headers: {
+        "x-api-key": apiKey
+      }
     };
     fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
     console.log(typography.success('Configuration updated successfully'));
-    
+
     // Display helpful information
     spacing.section();
     console.log(typography.info('Configuration Summary'));
@@ -1169,12 +1248,12 @@ async function connectIDE(ide: string) {
     console.log(typography.muted('  2. Find "VulnZap" in the server list'));
     console.log(typography.muted('  3. Use the toggle switch to enable/disable'));
     console.log(typography.muted('  4. Click on server name to access additional settings'));
-    
+
   } else if (ide === 'cline') {
     // Cline MCP config location and structure
     const clineDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings');
     const clineMcpConfigLocation = path.join(clineDir, 'cline_mcp_settings.json');
-    
+
     // Ensure parent directory exists
     if (!fs.existsSync(clineDir)) {
       fs.mkdirSync(clineDir, { recursive: true });
@@ -1197,16 +1276,18 @@ async function connectIDE(ide: string) {
 
     // Configure VulnZap MCP server with STDIO transport
     clineMcpConfig.mcpServers.VulnZap = {
-      command: "vulnzap",
-      args: ["secure", "--ide", "cline", "--port", "3456"],
-      alwaysAllow: ["auto-vulnerability-scan"], // Auto-approve vulnerability scanning
+      url: "https://vulnzap.com/mcp/sse",
+      headers: {
+        "x-api-key": apiKey
+      },
+      alwaysAllow: ["auto-vulnerability-scan"],
       disabled: false,
-      networkTimeout: 60000 // 1 minute default timeout
+      networkTimeout: 60000
     };
 
     fs.writeFileSync(clineMcpConfigLocation, JSON.stringify(clineMcpConfig, null, 2));
     console.log(typography.success('Configuration updated successfully'));
-    
+
     // Display helpful information
     spacing.section();
     console.log(typography.info('Configuration Summary'));
@@ -1220,7 +1301,20 @@ async function connectIDE(ide: string) {
     console.log(typography.muted('  2. Find "VulnZap" in the server list'));
     console.log(typography.muted('  3. Use the toggle switch to enable/disable'));
     console.log(typography.muted('  4. Click on server name to access additional settings'));
-    
+
+  } else if (ide === 'vscode') {
+    // For VSCode, we don't need MCP setup, just provide manual configuration instructions
+    console.log(typography.info('Manual Configuration for VS Code'));
+    spacing.line();
+    console.log(typography.muted('VS Code integration is handled via the VulnZap extension.'));
+    console.log(typography.muted('If you haven\'t installed it yet, you can:'));
+    console.log(typography.muted('  1. Open VS Code'));
+    console.log(typography.muted('  2. Go to Extensions (Ctrl+Shift+X)'));
+    console.log(typography.muted('  3. Search for "VulnZap"'));
+    console.log(typography.muted('  4. Install the extension'));
+    spacing.line();
+    console.log(typography.muted('The extension will automatically use your API key for scanning.'));
+
   } else {
     console.log(typography.info('Manual Configuration Required'));
     spacing.line();
@@ -1229,10 +1323,14 @@ async function connectIDE(ide: string) {
     console.log(typography.code(`{
   "mcpServers": {
     "VulnZap": {
-      "command": "vulnzap",
-      "args": ["secure", "--ide", "${ide}", "--port", "3456"]
+      "url": "https://vulnzap.com/mcp/sse",
+      "headers": {
+        "x-api-key": "${apiKey}"
+      }
     }
   }
 }`));
+    spacing.line();
+    console.log(typography.muted('Visit https://vulnzap.com/docs/ide-integration for more information'));
   }
 } 
