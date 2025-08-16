@@ -20,7 +20,7 @@ export const config = {
   // App info
   app: {
     name: "VulnZap",
-    version: "1.0.0",
+    version: "0.1.0",
     homeDir: path.join(
       process.env.HOME || process.env.USERPROFILE || "",
       ".vulnzap"
