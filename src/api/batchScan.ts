@@ -43,7 +43,7 @@ export async function batchScan(packages: PackageInfo[], options: ApiOptions): P
 
   try {
     const response = await axios.post(
-      `${config.api.baseUrl}${config.api.addOn}${config.api.vulnerability.batch}`,
+      `${config.api.engine}${config.api.vulnerability.batch}`,
       { packages },
       {
         headers: {
@@ -62,4 +62,4 @@ export async function batchScan(packages: PackageInfo[], options: ApiOptions): P
     }
     throw error;
   }
-} 
+}

@@ -1,4 +1,3 @@
-import { v4 } from 'uuid';
 import config from '../config/config.js';
 import { getKey } from './auth.js';
 
@@ -38,9 +37,7 @@ export interface UserProfile {
     current_period_end: string;
     line_scans_limit: number;
   },
-  apiUsage: {
-    lineScans: number
-  }
+  apiUsage: number
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
@@ -56,7 +53,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
     if (response.ok) {
       const profile = await response.json();
-      return profile;
+      return profile.data.user;
     } else {
       // Silently fail if profile endpoint isn't available yet
       return null;
@@ -70,7 +67,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 export async function getUserUsage(): Promise<{ current: number; limit: number; period: string } | null> {
   try {
     const apiKey = await getKey();
-    const response = await fetch(`${config.api.engine}/vulnzap/user/usage`, {
+    const response = await fetch(`${config.api.engine}/api/user/usage`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${apiKey}`,

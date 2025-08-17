@@ -16,9 +16,7 @@ export const mockUserProfile: UserProfile = {
     current_period_end: '2021-01-31',
     line_scans_limit: 25000
   },
-  apiUsage: {
-    lineScans: 20000
-  }
+  apiUsage: 20000
 };
 
 export const mockProUserProfile: UserProfile = {
@@ -36,9 +34,7 @@ export const mockProUserProfile: UserProfile = {
     current_period_end: '2021-01-31',
     line_scans_limit: 250000
   },
-  apiUsage: {
-    lineScans: 245000
-  }
+  apiUsage: 245000
 };
 
 export const mockEnterpriseUserProfile: UserProfile = {
@@ -56,9 +52,7 @@ export const mockEnterpriseUserProfile: UserProfile = {
     current_period_end: '2021-01-31',
     line_scans_limit: 1000000
   },
-  apiUsage: {
-    lineScans: 125000
-  }
+  apiUsage: 125000
 };
 
 // Function to enable mock mode (for testing)

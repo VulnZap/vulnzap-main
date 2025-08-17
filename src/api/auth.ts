@@ -1,5 +1,4 @@
 import { createServer } from 'http';
-import { AddressInfo } from 'net';
 import open from 'open';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
@@ -84,10 +83,6 @@ export async function saveKey(apiKey: string | null) {
 
 export async function getKey(): Promise<string> {
   try {
-    // Check in .env file first
-    const envKey = process.env.VULNZAP_API_KEY;
-    if (envKey) return envKey;
-
     // Check in config file
     const vulnzapDir = path.join(os.homedir(), '.vulnzap');
     const configPath = path.join(vulnzapDir, 'config.json');
@@ -115,12 +110,6 @@ export async function getKey(): Promise<string> {
 
 // Helper function to get access token
 export async function getAccessToken(): Promise<string> {
-  // Try to get token from environment variable first
-  const envToken = process.env.VULNZAP_API_KEY;
-  if (envToken) {
-    return envToken;
-  }
-
   // Try to get token from session file
   try {
     const sessionPath = getSessionFilePath();
@@ -217,9 +206,7 @@ function startAuthServer(state: string): Promise<AuthSession> {
       }
     }, 120000); // 120 seconds = 2 minutes
 
-    server.listen(AUTH_PORT, () => {
-      const address = server.address() as AddressInfo;
-    });
+    server.listen(AUTH_PORT);
 
     server.on('error', (error) => {
       if (!serverClosed) {
