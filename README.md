@@ -25,9 +25,9 @@ VulnZap is a real-time vulnerability scanning tool that integrates seamlessly wi
 - **OWASP Top 10 Compliance**: Built-in security guidance following OWASP standards
 
 ### IDE Integrations
-- **Cursor IDE**: Native MCP server integration
-- **Cline (Claude Dev)**: Full compatibility with Claude-based development
-- **Windsurf IDE**: Seamless integration with Codeium's AI IDE
+- **Cursor IDE**: Full MCP integration + automatic extension installation
+- **VS Code**: Extension-only integration (no MCP required)
+- **Windsurf IDE**: Full MCP integration + automatic extension installation
 - **Generic MCP Support**: Compatible with any MCP-enabled environment
 
 ## 📦 Installation
@@ -52,27 +52,26 @@ npm link
 
 ## 🛠️ Quick Start
 
-### 1. Setup API Key
+### 1. Complete Setup (Recommended)
 ```bash
-# Configure your API key (get it from https://vulnzap.com/dashboard/api-keys)
-vulnzap setup -k <your-api-key>
-
-# Setup API key with IDE connection in one step
-vulnzap setup -k <your-api-key> --ide cursor
-vulnzap setup -k <your-api-key> --ide windsurf
-vulnzap setup -k <your-api-key> --ide cline
+# Complete onboarding with API key setup and IDE integration
+npx vulnzap init
 ```
 
-### 2. Connect to Your IDE (if not done in step 1)
+This command will:
+- Guide you through API key setup
+- Automatically detect installed IDEs (VSCode, Cursor, Windsurf)
+- Allow you to select multiple IDEs for integration
+- Configure MCP settings and install extensions
+- Set up your development environment for secure coding
+
+### 2. Manual Setup (Alternative)
 ```bash
-# Connect to Cursor IDE
-vulnzap connect --ide cursor
+# Setup API key only
+vulnzap setup -k <your-api-key>
 
-# Connect to Windsurf IDE  
-vulnzap connect --ide windsurf
-
-# Connect to Cline
-vulnzap connect --ide cline
+# Setup API key with specific IDE
+vulnzap setup -k <your-api-key> --ide cursor
 ```
 
 ### 3. Start Scanning
@@ -82,11 +81,14 @@ Once connected, VulnZap automatically scans packages when your AI assistant trie
 
 ### Setup & Configuration
 ```bash
-# Setup API key
+# Complete setup with guided onboarding (recommended)
+vulnzap init
+
+# Setup API key only
 vulnzap setup -k <api-key>
 
-# Setup API key and connect to IDE in one step
-vulnzap setup -k <api-key> --ide <cursor|windsurf|cline>
+# Setup API key with specific IDE
+vulnzap setup -k <api-key> --ide <cursor|vscode|windsurf>
 
 # Check account information
 vulnzap account
@@ -122,12 +124,20 @@ vulnzap batch-scan [--ecosystem <ecosystem>] [--output <file>]
 
 ### IDE Integration
 ```bash
-# Connect to IDE (sets up MCP configuration)
-vulnzap connect [--ide cursor|cline|windsurf]
+# Connect to specific IDE (alternative to init/setup)
+vulnzap connect [--ide cursor|vscode|windsurf]
 
 # Start MCP server manually (for debugging)
 vulnzap secure [--ide <ide>] [--port <port>]
 ```
+
+#### Supported IDEs
+- **Cursor IDE**: Full MCP integration + extension
+- **VS Code**: Extension only (no MCP)
+- **Windsurf IDE**: Full MCP integration + extension
+
+#### Automatic IDE Detection
+The `init` command automatically detects which of the supported IDEs are installed on your system and allows you to select multiple IDEs for integration.
 
 ## 🔌 MCP Tools Reference
 

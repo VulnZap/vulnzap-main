@@ -78,9 +78,7 @@ export async function displayUserWelcome(): Promise<void> {
       // No profile available, skip personalized greeting
       return;
     }
-
-    console.log(profile);
-
+    
     spacing.line();
     
     // Welcome message

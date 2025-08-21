@@ -188,12 +188,118 @@ program
       // Show personalized welcome message
       await displayUserWelcome();
 
-      if (options.ide) {
+      // IDE Selection and Extension Installation
+      let selectedIDEs = options.ide ? [options.ide] : [];
+      if (selectedIDEs.length === 0) {
+        spacing.section();
+        console.log(typography.info('IDE Integration (Optional)'));
         spacing.line();
-        const ideSpinner = createSpinner('Configuring IDE integration...');
-        ideSpinner.start();
-        await connectIDE(options.ide);
-        ideSpinner.succeed(typography.success('IDE integration configured'));
+
+        const { configureIde } = await customPrompts.prompt([
+          {
+            type: 'confirm',
+            name: 'configureIde',
+            message: 'Would you like to configure IDE integration?',
+            default: true
+          }
+        ]);
+
+        if (configureIde) {
+          // Detect installed IDEs
+          const spinner = createSpinner('Detecting installed IDEs...');
+          spinner.start();
+          const installedIDEs = await detectInstalledIDEs();
+          spinner.stop();
+
+          if (installedIDEs.length === 0) {
+            console.log(typography.warning('No supported IDEs detected on your system'));
+            console.log(typography.muted('Supported IDEs: VS Code, Cursor, Windsurf'));
+            console.log(typography.muted('You can still configure them manually later'));
+            selectedIDEs = [];
+          }
+
+          // Create choices for multiselect
+          const ideChoices = installedIDEs.map(ide => ({
+            name: ide === 'vscode' ? 'VS Code' :
+                  ide === 'cursor' ? 'Cursor IDE' :
+                  ide === 'windsurf' ? 'Windsurf IDE' : ide,
+            value: ide
+          }));
+
+          const { chosenIDEs } = await customPrompts.prompt([
+            {
+              type: 'checkbox',
+              name: 'chosenIDEs',
+              message: 'Which development environments would you like to configure?',
+              choices: ideChoices,
+              default: installedIDEs
+            }
+          ]);
+          selectedIDEs = chosenIDEs;
+        }
+      }
+
+      if (selectedIDEs.length > 0) {
+        for (const selectedIde of selectedIDEs) {
+          spacing.line();
+          console.log(typography.info(`Setting up ${selectedIde}...`));
+
+          // Configure MCP for supported IDEs (all except vscode)
+          if (selectedIde !== 'vscode') {
+            const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
+            mcpSpinner.start();
+            try {
+              await connectIDE(selectedIde);
+              mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
+            } catch (error: any) {
+              mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
+              console.error(typography.error('Error:'), error.message);
+              continue;
+            }
+          }
+
+          // Install extension for all supported IDEs
+          const extSpinner = createSpinner(`Installing VulnZap extension for ${selectedIde}...`);
+          extSpinner.start();
+          try {
+            const result = await installIDEExtension(selectedIde);
+            if (result.success) {
+              extSpinner.succeed(typography.success(`${selectedIde} extension installed successfully`));
+
+              // Show instructions for the IDE
+              if (result.instructions && result.instructions.length > 0) {
+                spacing.line();
+                result.instructions.forEach(instruction => {
+                  if (instruction === '') {
+                    console.log('');
+                  } else {
+                    console.log(typography.muted(instruction));
+                  }
+                });
+              }
+            } else {
+              extSpinner.warn(typography.warning(`${selectedIde} extension installation had issues`));
+
+              // Show error and instructions
+              if (result.error) {
+                console.log(typography.error(`Error: ${result.error}`));
+              }
+              if (result.instructions && result.instructions.length > 0) {
+                spacing.line();
+                result.instructions.forEach(instruction => {
+                  console.log(typography.muted(instruction));
+                });
+              }
+            }
+          } catch (error: any) {
+            extSpinner.fail(typography.error(`${selectedIde} extension installation failed`));
+            console.error(typography.error('Error:'), error.message);
+          }
+        }
+
+        spacing.section();
+        console.log(typography.success('IDE setup complete!'));
+        console.log(typography.muted('Your development environments are now secured with VulnZap'));
       }
 
     } catch (error: any) {
@@ -322,124 +428,116 @@ program
       console.log(typography.info('Setting up IDE integration'));
       spacing.line();
 
-      const { selectedIde } = await customPrompts.prompt([
-        {
-          type: 'list',
-          name: 'selectedIde',
-          message: 'Which development environment are you using?',
-          choices: [
-            { name: 'Cursor IDE', value: 'cursor' },
-            { name: 'Windsurf IDE', value: 'windsurf' },
-            { name: 'Cline (VS Code Extension)', value: 'cline' },
-            { name: 'VS Code', value: 'vscode' },
-            { name: 'Other (Manual Configuration)', value: 'other' }
-          ],
-          default: 'cursor'
-        }
-      ]);
+      // Detect installed IDEs
+      const ideSpinner = createSpinner('Detecting installed IDEs...');
+      ideSpinner.start();
+      const installedIDEs = await detectInstalledIDEs();
+      ideSpinner.stop();
 
-      // Step 4.1: Handle VSCode extension installation if VSCode is selected
-      if (selectedIde === 'vscode') {
-        spacing.line();
-        
-        // Check if VS Code CLI is available
-        try {
-          execSync('code --version', { stdio: 'pipe' });
-        } catch (error) {
-          console.log(typography.warning('VS Code CLI not found. Please ensure VS Code is installed and added to PATH.'));
-          console.log(typography.muted('To add VS Code to PATH:'));
-          console.log(typography.muted('  1. Open VS Code'));
-          console.log(typography.muted('  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)'));
-          console.log(typography.muted('  3. Type "Shell Command: Install \'code\' command in PATH"'));
-          console.log(typography.muted('  4. Run the command and restart your terminal'));
-          spacing.section();
-        }
+      if (installedIDEs.length === 0) {
+        console.log(typography.warning('No supported IDEs detected on your system'));
+        console.log(typography.muted('Supported IDEs: VS Code, Cursor, Windsurf'));
+        console.log(typography.muted('You can still configure them manually later'));
+      } else {
+        // Create choices for multiselect
+        const ideChoices = installedIDEs.map(ide => ({
+          name: ide === 'vscode' ? 'VS Code' :
+                ide === 'cursor' ? 'Cursor IDE' :
+                ide === 'windsurf' ? 'Windsurf IDE' : ide,
+          value: ide
+        }));
 
-        const { installExtension } = await customPrompts.prompt([
+        const { selectedIDEs } = await customPrompts.prompt([
           {
-            type: 'confirm',
-            name: 'installExtension',
-            message: 'Would you like to install the VulnZap VS Code extension?',
-            default: true
+            type: 'checkbox',
+            name: 'selectedIDEs',
+            message: 'Which development environments would you like to configure?',
+            choices: ideChoices,
+            default: installedIDEs
           }
         ]);
 
-        if (installExtension) {
-          const extensionSpinner = createSpinner('Installing VulnZap VS Code extension...');
-          extensionSpinner.start();
-          
-          try {
-            // Install the VulnZap extension
-            const extensionId = 'vulnzap.vulnzap';
-            
-            try {
-              execSync(`code --install-extension ${extensionId}`, { stdio: 'pipe' });
-              extensionSpinner.succeed(typography.success('VulnZap extension installed successfully'));
-            } catch (installError) {
-              extensionSpinner.warn(typography.warning('VulnZap extension not yet available in marketplace'));
-              console.log(typography.info('Manual installation will be available soon.'));
-              console.log(typography.muted('Visit https://vulnzap.com/vscode for updates'));
-              console.log(typography.muted('Or install the extension manually from the marketplace'));
+        if (selectedIDEs.length > 0) {
+          for (const selectedIde of selectedIDEs) {
+            spacing.line();
+            console.log(typography.info(`Setting up ${selectedIde}...`));
+
+            // Configure MCP for supported IDEs (all except vscode)
+            if (selectedIde !== 'vscode') {
+              const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
+              mcpSpinner.start();
+              try {
+                await connectIDE(selectedIde);
+                mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
+              } catch (error: any) {
+                mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
+                console.error(typography.error('Error:'), error.message);
+                continue;
+              }
             }
 
-            // Display helpful information about the extension
-            spacing.section();
-            console.log(typography.info('VS Code Extension Setup Complete'));
-            console.log(typography.muted('  Extension: VulnZap Security Scanner'));
-            console.log(typography.muted('  Auto-scan: Enabled for supported files'));
-            console.log(typography.muted('  API Integration: Configured with your account'));
-            spacing.section();
-            console.log(typography.info('To use the extension:'));
-            console.log(typography.muted('  1. Open a project in VS Code'));
-            console.log(typography.muted('  2. Install dependencies or create new files'));
-            console.log(typography.muted('  3. VulnZap will automatically scan for vulnerabilities'));
-            console.log(typography.muted('  4. Check the Problems panel for security issues'));
-            
-          } catch (error: any) {
-            extensionSpinner.fail('Failed to install VS Code extension');
-            console.error(typography.error('Error:'), error.message);
-            console.log(typography.muted('Manual installation instructions:'));
-            console.log(typography.muted('  1. Open VS Code'));
-            console.log(typography.muted('  2. Go to Extensions (Ctrl+Shift+X)'));
-            console.log(typography.muted('  3. Search for "VulnZap"'));
-            console.log(typography.muted('  4. Install the extension'));
+            // Install extension for all supported IDEs
+            const extSpinner = createSpinner(`Installing VulnZap extension for ${selectedIde}...`);
+            extSpinner.start();
+            try {
+              const result = await installIDEExtension(selectedIde);
+              if (result.success) {
+                extSpinner.succeed(typography.success(`${selectedIde} extension installed successfully`));
+
+                // Show instructions for the IDE
+                if (result.instructions && result.instructions.length > 0) {
+                  spacing.line();
+                  result.instructions.forEach(instruction => {
+                    if (instruction === '') {
+                      console.log('');
+                    } else {
+                      console.log(typography.muted(instruction));
+                    }
+                  });
+                }
+              } else {
+                extSpinner.warn(typography.warning(`${selectedIde} extension installation had issues`));
+
+                // Show error and instructions
+                if (result.error) {
+                  console.log(typography.error(`Error: ${result.error}`));
+                }
+                if (result.instructions && result.instructions.length > 0) {
+                  spacing.line();
+                  result.instructions.forEach(instruction => {
+                    console.log(typography.muted(instruction));
+                  });
+                }
+              }
+            } catch (error: any) {
+              extSpinner.fail(typography.error(`${selectedIde} extension installation failed`));
+              console.error(typography.error('Error:'), error.message);
+            }
           }
+
+          // Step 5: Success and next steps
+          spacing.section();
+          console.log(typography.title('Setup Complete'));
         } else {
-          console.log(typography.info('VS Code extension installation skipped'));
-          console.log(typography.muted('You can install it later from the VS Code Extensions marketplace'));
+          console.log(typography.info('No IDEs selected'));
+          console.log(typography.muted('You can configure them manually later'));
         }
-
-        spacing.section();
       }
 
-      const ideSpinner = createSpinner(`Configuring ${selectedIde} integration...`);
-      ideSpinner.start();
+      // Step 5: Success and next steps (only show if IDE setup was attempted)
+      spacing.section();
+      console.log(typography.title('Setup Complete'));
+      console.log(typography.subtitle('VulnZap is now protecting your AI-generated code'));
+      spacing.section();
 
-      try {
-        await connectIDE(selectedIde);
-        ideSpinner.succeed(typography.success(`${selectedIde} integration configured`));
+      console.log(typography.info('What\'s next:'));
+      console.log(typography.muted('  • Start coding - vulnerabilities will be caught automatically'));
+      console.log(typography.muted('  • View detailed logs at vulnzap.com/dashboard/logs'));
+      console.log(typography.muted('  • Run `vulnzap check <package>` to manually scan packages'));
+      console.log(typography.muted('  • Run `vulnzap status` to verify everything is working'));
+      spacing.section();
 
-        // Step 5: Success and next steps
-        spacing.section();
-        console.log(typography.title('Setup Complete'));
-        console.log(typography.subtitle('VulnZap is now protecting your AI-generated code'));
-        spacing.section();
-
-        console.log(typography.info('What\'s next:'));
-        console.log(typography.muted('  • Start coding - vulnerabilities will be caught automatically'));
-        console.log(typography.muted('  • View detailed logs at vulnzap.com/dashboard/logs'));
-        console.log(typography.muted('  • Run `vulnzap check <package>` to manually scan packages'));
-        console.log(typography.muted('  • Run `vulnzap status` to verify everything is working'));
-        spacing.section();
-
-        console.log(typography.muted('Need help? Visit vulnzap.com/docs or run `vulnzap help`'));
-      } catch (error: any) {
-        ideSpinner.fail(`Failed to configure ${selectedIde} integration`);
-        console.error(typography.error('Error:'), error.message);
-        spacing.line();
-        console.log(typography.muted(`Manual configuration available:`));
-        console.log(typography.code(`vulnzap connect --ide ${selectedIde}`));
-      }
+      console.log(typography.muted('Need help? Visit vulnzap.com/docs or run `vulnzap help`'));
 
     } catch (error: any) {
       spacing.section();
@@ -1039,6 +1137,108 @@ if (process.argv.length === 2) {
   console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
   console.log(typography.muted('  vulnzap help                Show all available commands'));
   spacing.section();
+}
+
+// Helper function to detect installed IDEs
+async function detectInstalledIDEs(): Promise<string[]> {
+  const installedIDEs: string[] = [];
+  const supportedIDEs = [
+    { name: 'vscode', command: 'code', displayName: 'VS Code' },
+    { name: 'cursor', command: 'cursor', displayName: 'Cursor IDE' },
+    { name: 'windsurf', command: 'windsurf', displayName: 'Windsurf IDE' }
+  ];
+
+  for (const ide of supportedIDEs) {
+    try {
+      await execSync(`${ide.command} --version`, { stdio: 'pipe' });
+      installedIDEs.push(ide.name);
+    } catch (error) {
+      // IDE not installed, skip
+    }
+  }
+
+  return installedIDEs;
+}
+
+// Helper function to install IDE extensions
+async function installIDEExtension(ide: string) {
+  try {
+    if (ide === 'vscode') {
+      // Check if VS Code CLI is available
+      try {
+        execSync('code --version', { stdio: 'pipe' });
+      } catch (error) {
+        return { success: false, error: 'VS Code CLI not found', instructions: [
+          'VS Code CLI not found. Please ensure VS Code is installed and added to PATH.',
+          'To add VS Code to PATH:',
+          '  1. Open VS Code',
+          '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
+          '  3. Type "Shell Command: Install \'code\' command in PATH"',
+          '  4. Run the command and restart your terminal'
+        ]};
+      }
+
+      // Install the VulnZap extension
+      const extensionId = 'vulnzap.vulnzap';
+      try {
+        execSync(`code --install-extension ${extensionId}`, { stdio: 'pipe' });
+        return {
+          success: true,
+          instructions: [
+            'VS Code Extension Setup Complete',
+            '  Extension: VulnZap Security Scanner',
+            '  Auto-scan: Enabled for supported files',
+            '  API Integration: Configured with your account',
+            '',
+            'To use the extension:',
+            '  1. Open a project in VS Code',
+            '  2. Install dependencies or create new files',
+            '  3. VulnZap will automatically scan for vulnerabilities',
+            '  4. Check the Problems panel for security issues'
+          ]
+        };
+      } catch (installError) {
+        return {
+          success: false,
+          error: 'Extension not available in marketplace',
+          instructions: [
+            'VulnZap extension not yet available in marketplace',
+            'Manual installation will be available soon.',
+            'Visit https://vulnzap.com/vscode for updates',
+            'Or install the extension manually from the marketplace'
+          ]
+        };
+      }
+    } else if (ide === 'cursor') {
+      // For Cursor, provide manual installation instructions
+      return {
+        success: true,
+        instructions: [
+          'Cursor Extension Installation',
+          '',
+          'Cursor uses the same extension marketplace as VS Code.',
+          'To install the VulnZap extension:',
+          '  1. Open Cursor',
+          '  2. Go to Extensions (Ctrl+Shift+X)',
+          '  3. Search for "VulnZap"',
+          '  4. Install the extension',
+          '',
+          'The extension will automatically use your API key for scanning.'
+        ]
+      };
+    } else {
+      return {
+        success: false,
+        error: `Extension installation for ${ide} is not yet automated`,
+        instructions: [
+          `Extension installation for ${ide} is not yet automated.`,
+          'Please visit https://vulnzap.com/docs/ide-integration for manual setup instructions.'
+        ]
+      };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message, instructions: [] };
+  }
 }
 
 // Helper function to handle IDE connection logic
