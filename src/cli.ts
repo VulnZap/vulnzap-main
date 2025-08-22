@@ -313,15 +313,16 @@ program
 program
   .command('init')
   .description('Complete onboarding and configuration')
-  .option('--no-ui', 'Run classic non-TUI setup flow')
+  .option('--no-tui', 'Disable full-screen TUI for this run')
   .action(async (options) => {
-    // Prefer TUI unless disabled or not a TTY
-    const shouldLaunchTUI = process.stdout.isTTY && options.ui !== false;
-    if (shouldLaunchTUI) {
+    // Prefer the magical full-screen TUI when in an interactive terminal
+    if (process.stdout.isTTY && process.env.VULNZAP_NO_TUI !== '1' && options.tui !== false) {
       try {
         await startTUI();
         return;
-      } catch {}
+      } catch (e) {
+        // If TUI fails, fall back to classic flow
+      }
     }
     // Handle Ctrl+C gracefully
     const handleExit = () => {
@@ -1115,6 +1116,7 @@ program
     console.log('  connect                   Connect VulnZap to your AI-powered IDE');
     console.log('  check <package>           Check a package for vulnerabilities');
     console.log('  batch-scan                Scan all packages in current directory');
+    console.log('  ui                        Launch full-screen terminal UI');
     console.log('  status                    Check VulnZap server health');
     console.log('  account                   View account information');
     console.log('  help                      Display this help information');
@@ -1154,24 +1156,12 @@ program.parse(process.argv);
 
 // If no args, display help
 if (process.argv.length === 2) {
-  if (process.stdout.isTTY) {
-    // Default to TUI on interactive terminals
-    startTUI().catch(() => {
-      displayBanner();
-      console.log(typography.title('Get started with VulnZap'));
-      spacing.section();
-      console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
-      console.log(typography.muted('  vulnzap help                Show all available commands'));
-      spacing.section();
-    });
-  } else {
-    displayBanner();
-    console.log(typography.title('Get started with VulnZap'));
-    spacing.section();
-    console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
-    console.log(typography.muted('  vulnzap help                Show all available commands'));
-    spacing.section();
-  }
+  displayBanner();
+  console.log(typography.title('Get started with VulnZap'));
+  spacing.section();
+  console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
+  console.log(typography.muted('  vulnzap help                Show all available commands'));
+  spacing.section();
 }
 
 // Helper function to detect installed IDEs
