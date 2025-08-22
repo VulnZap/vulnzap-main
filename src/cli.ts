@@ -1210,22 +1210,69 @@ async function installIDEExtension(ide: string) {
         };
       }
     } else if (ide === 'cursor') {
-      // For Cursor, provide manual installation instructions
-      return {
-        success: true,
-        instructions: [
-          'Cursor Extension Installation',
-          '',
-          'Cursor uses the same extension marketplace as VS Code.',
-          'To install the VulnZap extension:',
-          '  1. Open Cursor',
-          '  2. Go to Extensions (Ctrl+Shift+X)',
-          '  3. Search for "VulnZap"',
-          '  4. Install the extension',
-          '',
-          'The extension will automatically use your API key for scanning.'
-        ]
-      };
+      // Install VulnZap extension for Cursor
+      const extensionId = 'vulnzap.vulnzap';
+      try {
+        execSync(`cursor --install-extension ${extensionId}`, { stdio: 'pipe' });
+        return {
+          success: true,
+          instructions: [
+            'Cursor Extension Setup Complete',
+            '  Extension: VulnZap Security Scanner',
+            '  Auto-scan: Enabled for supported files',
+            '  API Integration: Configured with your account',
+            '',
+            'To use the extension:',
+            '  1. Open a project in Cursor',
+            '  2. Install dependencies or create new files',
+            '  3. VulnZap will automatically scan for vulnerabilities',
+            '  4. Check the Problems panel for security issues'
+          ]
+        };
+      } catch (installError) {
+        return {
+          success: false,
+          error: 'Extension installation failed',
+          instructions: [
+            'Cursor Extension Installation Failed',
+            'Manual installation will be available soon.',
+            'Visit https://vulnzap.com/cursor for updates',
+            'Or try installing manually from the marketplace'
+          ]
+        };
+      }
+    } else if (ide === 'windsurf') {
+      // Install VulnZap extension for Windsurf
+      const extensionId = 'vulnzap.vulnzap';
+      try {
+        execSync(`windsurf --install-extension ${extensionId}`, { stdio: 'pipe' });
+        return {
+          success: true,
+          instructions: [
+            'Windsurf Extension Setup Complete',
+            '  Extension: VulnZap Security Scanner',
+            '  Auto-scan: Enabled for supported files',
+            '  API Integration: Configured with your account',
+            '',
+            'To use the extension:',
+            '  1. Open a project in Windsurf',
+            '  2. Install dependencies or create new files',
+            '  3. VulnZap will automatically scan for vulnerabilities',
+            '  4. Check the Problems panel for security issues'
+          ]
+        };
+      } catch (installError) {
+        return {
+          success: false,
+          error: 'Extension installation failed',
+          instructions: [
+            'Windsurf Extension Installation Failed',
+            'Manual installation will be available soon.',
+            'Visit https://vulnzap.com/windsurf for updates',
+            'Or try installing manually from the marketplace'
+          ]
+        };
+      }
     } else {
       return {
         success: false,
@@ -1423,6 +1470,13 @@ async function connectIDE(ide: string) {
     console.log(typography.muted('  4. Install the extension'));
     spacing.line();
     console.log(typography.muted('The extension will automatically use your API key for scanning.'));
+    spacing.line();
+    // Experience notes (aesthetic, Apple-like)
+    console.log(typography.subtitle('Experience'));
+    console.log(typography.muted('  • Full experience: Cursor & Windsurf (with MCP agent)'));
+    console.log(typography.muted('  • VS Code: Developer checks only — no agent interference'));
+    spacing.line();
+    console.log(typography.accent('For the best experience, use Cursor or Windsurf'));
 
   } else {
     console.log(typography.info('Manual Configuration Required'));
