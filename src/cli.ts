@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 import { cacheService } from './services/cache.js';
 import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
 import { getMockProfile } from './utils/mockUser.js';
-import { startTUI } from './tui.js';
+import { detectInstalledIDEs, installIDEExtension, connectIDE } from './utils/ideIntegration.js';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -315,13 +315,13 @@ program
   .description('Complete onboarding and configuration')
   .option('--no-tui', 'Disable full-screen TUI for this run')
   .action(async (options) => {
-    // Prefer the magical full-screen TUI when in an interactive terminal
     if (process.stdout.isTTY && process.env.VULNZAP_NO_TUI !== '1' && options.tui !== false) {
       try {
-        await startTUI();
+        const tui = await import('./tui.js');
+        await (tui as any).startTUI();
         return;
       } catch (e) {
-        // If TUI fails, fall back to classic flow
+        // Fall back to classic flow
       }
     }
     // Handle Ctrl+C gracefully
@@ -1144,7 +1144,8 @@ program
   .description('Launch the full-screen terminal UI')
   .action(async () => {
     try {
-      await startTUI();
+      const tui = await import('./tui.js');
+      await (tui as any).startTUI();
     } catch (error: any) {
       console.error(typography.error('TUI failed:'), error.message);
       process.exit(1);
@@ -1164,32 +1165,9 @@ if (process.argv.length === 2) {
   spacing.section();
 }
 
-// Helper function to detect installed IDEs
-async function detectInstalledIDEs(): Promise<string[]> {
-  const installedIDEs: string[] = [];
-  const supportedIDEs = [
-    { name: 'vscode', command: 'code', displayName: 'VS Code' },
-    { name: 'cursor', command: 'cursor', displayName: 'Cursor IDE' },
-    { name: 'windsurf', command: 'windsurf', displayName: 'Windsurf IDE' }
-  ];
+// Legacy helpers migrated to utils/ideIntegration.ts
 
-  for (const ide of supportedIDEs) {
-    try {
-      await execSync(`${ide.command} --version`, { stdio: 'pipe' });
-      installedIDEs.push(ide.name);
-    } catch (error) {
-      // Fallback detection for VS Code when CLI is not on PATH
-      const resolved = resolveIDECLIPath(ide.name);
-      if (resolved) {
-        installedIDEs.push(ide.name);
-      }
-    }
-  }
-
-  return installedIDEs;
-}
-
-// Resolve VS Code CLI path when 'code' is not on PATH
+// Resolve VS Code CLI path when 'code' is not on PATH (deprecated - moved to utils)
 function resolveVSCodeCLIPath(): string | null {
   const platform = os.platform();
   const candidates: string[] = [];
@@ -1221,6 +1199,7 @@ function resolveVSCodeCLIPath(): string | null {
   return null;
 }
 
+// Resolve IDE CLI path (deprecated - moved to utils)
 function resolveIDECLIPath(ide: string): string | null {
   if (ide === 'vscode') return resolveVSCodeCLIPath();
   const platform = os.platform();
@@ -1256,6 +1235,7 @@ function resolveIDECLIPath(ide: string): string | null {
   return null;
 }
 
+// Quote command if needed (deprecated - moved to utils)
 function quoteCmdIfNeeded(cmd: string): string {
   if (!cmd) return cmd;
   return cmd.includes(' ') ? `"${cmd}"` : cmd;
@@ -1283,7 +1263,7 @@ function tryEnsureVSCodeSymlink(codePath: string): void {
 }
 
 // Helper function to install IDE extensions
-async function installIDEExtension(ide: string) {
+async function installIDEExtensionLegacy(ide: string) {
   try {
     if (ide === 'vscode') {
       // Best-effort: ensure VS Code CLI available
@@ -1296,15 +1276,15 @@ async function installIDEExtension(ide: string) {
           codeCmd = quoteCmdIfNeeded(resolved);
           tryEnsureVSCodeSymlink(resolved);
         } else {
-          return { success: false, error: 'VS Code CLI not found', instructions: [
+        return { success: false, error: 'VS Code CLI not found', instructions: [
             'VS Code found but CLI not available in PATH.',
             'We attempted automatic detection; manual PATH install may be required.',
-            'To add VS Code to PATH:',
-            '  1. Open VS Code',
-            '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
-            '  3. Type "Shell Command: Install \'code\' command in PATH"',
-            '  4. Run the command and restart your terminal'
-          ]};
+          'To add VS Code to PATH:',
+          '  1. Open VS Code',
+          '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
+          '  3. Type "Shell Command: Install \'code\' command in PATH"',
+          '  4. Run the command and restart your terminal'
+        ]};
         }
       }
 
@@ -1421,7 +1401,7 @@ async function installIDEExtension(ide: string) {
 }
 
 // Helper function to handle IDE connection logic
-async function connectIDE(ide: string) {
+async function connectIDELegacy(ide: string) {
   // Log the event
   const logFile = join(os.homedir(), '.vulnzap', 'info.log');
   const logStream = fs.createWriteStream(logFile, { flags: 'a' });

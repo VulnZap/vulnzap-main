@@ -54,6 +54,7 @@
     "node": ">=16.0.0"
   },
   "dependencies": {
+    "blessed": "^0.1.81",
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.12.1",
     "@types/blessed": "^0.1.25",
