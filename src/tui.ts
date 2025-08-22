@@ -146,9 +146,17 @@ export async function startTUI() {
       const skipBtn = blessed.button({ parent: modal, top: 7, left: 9, shrink: true, mouse: true, keys: true, content: ' Skip ', style: { bg: 'black', fg: 'white', focus: { bg: 'gray' } } });
 
       function close(val: string | null) {
-        modal.detach();
-        screen.render();
-        resolve(val);
+        try {
+          // Ensure focus leaves the textbox before detaching to avoid blessed cursor errors
+          if ((input as any).blur) { (input as any).blur(); }
+          sidebar.focus();
+        } catch {}
+        // Detach on next tick to allow focus change to settle
+        setImmediate(() => {
+          try { modal.detach(); } catch {}
+          screen.render();
+          resolve(val);
+        });
       }
 
       saveBtn.on('press', () => {
