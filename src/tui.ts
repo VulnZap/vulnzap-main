@@ -137,6 +137,39 @@ export async function startTUI() {
     write(`{bold}${title}{/bold}\n\n${body}`);
   }
 
+  async function promptApiKey(): Promise<string | null> {
+    return new Promise((resolve) => {
+      const modal = blessed.box({ parent: content, label: ' API Key ', border: 'line', top: 3, left: 2, width: '80%', height: 9, tags: true, keys: true });
+      blessed.text({ parent: modal, top: 1, left: 1, content: 'Paste your API key (or Skip):' });
+      const input = blessed.textbox({ parent: modal, top: 3, left: 1, width: '95%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
+      const saveBtn = blessed.button({ parent: modal, top: 7, left: 1, shrink: true, mouse: true, keys: true, content: ' Save ', style: { bg: 'cyan', fg: 'black', focus: { bg: 'green' } } });
+      const skipBtn = blessed.button({ parent: modal, top: 7, left: 9, shrink: true, mouse: true, keys: true, content: ' Skip ', style: { bg: 'black', fg: 'white', focus: { bg: 'gray' } } });
+
+      function close(val: string | null) {
+        modal.detach();
+        screen.render();
+        resolve(val);
+      }
+
+      saveBtn.on('press', () => {
+        // @ts-ignore
+        const val = (input.getValue?.() || '').toString().trim();
+        close(val || null);
+      });
+      skipBtn.on('press', () => close(null));
+
+      // Enter on input acts like Save
+      // @ts-ignore
+      input.key(['enter'], () => saveBtn.emit('press'));
+      // Esc acts like Skip
+      modal.key(['escape'], () => skipBtn.emit('press'));
+
+      input.focus();
+      lastInteractive = input;
+      screen.render();
+    });
+  }
+
   function detectInstalledIDEs(): string[] {
     const installed: string[] = [];
     const supported = [
@@ -261,14 +294,15 @@ export async function startTUI() {
               screen.render();
             }).catch(() => { append(`\n{red-fg}Auth failed{/red-fg}`); screen.render(); resolve(); });
           } else {
-            const input = blessed.textbox({ parent: content, top: 4, left: 2, width: '80%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
-            input.focus(); lastInteractive = input; screen.render();
-            input.readInput(async (err, value) => {
-              input.detach();
-              if (value) await saveKey(value.trim());
-              append(value ? '\n{green-fg}API key saved{/green-fg}' : '\n{yellow-fg}No key entered{/yellow-fg}');
-              screen.render(); resolve();
-            });
+            const value = await promptApiKey();
+            if (value) {
+              await saveKey(value);
+              append('\n{green-fg}API key saved{/green-fg}');
+            } else {
+              append('\n{yellow-fg}No key entered{/yellow-fg}');
+            }
+            screen.render();
+            resolve();
           }
         });
       });
