@@ -1154,11 +1154,9 @@ async function detectInstalledIDEs(): Promise<string[]> {
       installedIDEs.push(ide.name);
     } catch (error) {
       // Fallback detection for VS Code when CLI is not on PATH
-      if (ide.name === 'vscode') {
-        const resolved = resolveVSCodeCLIPath();
-        if (resolved) {
-          installedIDEs.push(ide.name);
-        }
+      const resolved = resolveIDECLIPath(ide.name);
+      if (resolved) {
+        installedIDEs.push(ide.name);
       }
     }
   }
@@ -1198,6 +1196,46 @@ function resolveVSCodeCLIPath(): string | null {
   return null;
 }
 
+function resolveIDECLIPath(ide: string): string | null {
+  if (ide === 'vscode') return resolveVSCodeCLIPath();
+  const platform = os.platform();
+  const candidates: string[] = [];
+  if (ide === 'cursor') {
+    if (platform === 'darwin') {
+      candidates.push('/Applications/Cursor.app/Contents/Resources/app/bin/cursor');
+      candidates.push(join(os.homedir(), 'Applications', 'Cursor.app', 'Contents', 'Resources', 'app', 'bin', 'cursor'));
+    } else if (platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
+      candidates.push(join(localAppData, 'Programs', 'Cursor', 'bin', 'cursor.exe'));
+    } else {
+      candidates.push('/usr/bin/cursor');
+      candidates.push('/snap/bin/cursor');
+    }
+  } else if (ide === 'windsurf') {
+    if (platform === 'darwin') {
+      candidates.push('/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf');
+      candidates.push(join(os.homedir(), 'Applications', 'Windsurf.app', 'Contents', 'Resources', 'app', 'bin', 'windsurf'));
+    } else if (platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
+      candidates.push(join(localAppData, 'Programs', 'Windsurf', 'bin', 'windsurf.exe'));
+    } else {
+      candidates.push('/usr/bin/windsurf');
+      candidates.push('/snap/bin/windsurf');
+    }
+  }
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+function quoteCmdIfNeeded(cmd: string): string {
+  if (!cmd) return cmd;
+  return cmd.includes(' ') ? `"${cmd}"` : cmd;
+}
+
 // Best-effort symlink for VS Code CLI on macOS/Linux
 function tryEnsureVSCodeSymlink(codePath: string): void {
   try {
@@ -1230,7 +1268,7 @@ async function installIDEExtension(ide: string) {
       } catch {
         const resolved = resolveVSCodeCLIPath();
         if (resolved) {
-          codeCmd = resolved;
+          codeCmd = quoteCmdIfNeeded(resolved);
           tryEnsureVSCodeSymlink(resolved);
         } else {
           return { success: false, error: 'VS Code CLI not found', instructions: [
@@ -1277,10 +1315,11 @@ async function installIDEExtension(ide: string) {
         };
       }
     } else if (ide === 'cursor') {
-      // Install VulnZap extension for Cursor
+      // Install VulnZap extension for Cursor (resolve binary if not on PATH)
       const extensionId = 'vulnzap.vulnzap';
+      const cursorCmd = quoteCmdIfNeeded(resolveIDECLIPath('cursor') || 'cursor');
       try {
-        execSync(`cursor --install-extension ${extensionId}`, { stdio: 'pipe' });
+        execSync(`${cursorCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
           success: true,
           instructions: [
@@ -1309,10 +1348,11 @@ async function installIDEExtension(ide: string) {
         };
       }
     } else if (ide === 'windsurf') {
-      // Install VulnZap extension for Windsurf
+      // Install VulnZap extension for Windsurf (resolve binary if not on PATH)
       const extensionId = 'vulnzap.vulnzap';
+      const windsurfCmd = quoteCmdIfNeeded(resolveIDECLIPath('windsurf') || 'windsurf');
       try {
-        execSync(`windsurf --install-extension ${extensionId}`, { stdio: 'pipe' });
+        execSync(`${windsurfCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
           success: true,
           instructions: [
