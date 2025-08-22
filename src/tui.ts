@@ -19,6 +19,17 @@ export async function startTUI() {
     title: 'VulnZap — Secure AI Development',
   }) as ScreenWithKeys;
 
+  const menuItems = [
+    ' Quick Setup',
+    ' Welcome',
+    ' Setup',
+    ' Status',
+    ' Check Package',
+    ' Batch Scan',
+    ' IDE Connect',
+    ' Exit',
+  ];
+
   const sidebar = blessed.list({
     parent: screen,
     label: ' Menu ',
@@ -32,16 +43,7 @@ export async function startTUI() {
       selected: { bg: 'cyan', fg: 'black' },
       item: { hover: { bg: 'gray' } },
     },
-    items: [
-      ' Quick Setup',
-      ' Welcome',
-      ' Setup',
-      ' Status',
-      ' Check Package',
-      ' Batch Scan',
-      ' IDE Connect',
-      ' Exit',
-    ],
+    items: menuItems,
   });
 
   const content = blessed.box({
@@ -86,8 +88,8 @@ export async function startTUI() {
     write(
       '{bold}VulnZap — Security-first AI development{/bold}\n\n' +
       'Streamlined setup, real-time vulnerability checks, and IDE integrations.\n\n' +
-      '{gray}- Use the sidebar to explore actions{/gray}\n' +
-      '{gray}- Press q at any time to exit{/gray}'
+      '{gray-fg}- Use the sidebar to explore actions{/gray-fg}\n' +
+      '{gray-fg}- Press q at any time to exit{/gray-fg}'
     );
   }
 
@@ -455,6 +457,31 @@ export async function startTUI() {
     } else {
       sidebar.focus();
     }
+  });
+
+  function isTextInput(el: any): boolean {
+    if (!el) return false;
+    const t = el.type || el.name || '';
+    return t === 'textbox' || t === 'textarea';
+  }
+
+  async function runMenuAt(index: number) {
+    if (index < 0) index = 0;
+    if (index >= menuItems.length) index = menuItems.length - 1;
+    (sidebar as any).select(index);
+    const label = menuItems[index];
+    content.children.forEach(ch => ch.detach());
+    const fn = actions[label];
+    if (fn) await fn(); else await drawWelcome();
+    screen.render();
+  }
+
+  // Global navigation: arrows/j,k switch tabs immediately unless typing
+  screen.key(['up', 'down', 'k', 'j'], async (_, key) => {
+    if (isTextInput((screen as any).focused)) return; // don't hijack typing
+    const sel = (sidebar as any).selected || 0;
+    const delta = (key.name === 'up' || key.name === 'k') ? -1 : 1;
+    await runMenuAt(sel + delta);
   });
 
   screen.key(['tab'], () => {
