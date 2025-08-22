@@ -313,7 +313,16 @@ program
 program
   .command('init')
   .description('Complete onboarding and configuration')
-  .action(async () => {
+  .option('--no-ui', 'Run classic non-TUI setup flow')
+  .action(async (options) => {
+    // Prefer TUI unless disabled or not a TTY
+    const shouldLaunchTUI = process.stdout.isTTY && options.ui !== false;
+    if (shouldLaunchTUI) {
+      try {
+        await startTUI();
+        return;
+      } catch {}
+    }
     // Handle Ctrl+C gracefully
     const handleExit = () => {
       spacing.line();
@@ -1145,12 +1154,24 @@ program.parse(process.argv);
 
 // If no args, display help
 if (process.argv.length === 2) {
-  displayBanner();
-  console.log(typography.title('Get started with VulnZap'));
-  spacing.section();
-  console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
-  console.log(typography.muted('  vulnzap help                Show all available commands'));
-  spacing.section();
+  if (process.stdout.isTTY) {
+    // Default to TUI on interactive terminals
+    startTUI().catch(() => {
+      displayBanner();
+      console.log(typography.title('Get started with VulnZap'));
+      spacing.section();
+      console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
+      console.log(typography.muted('  vulnzap help                Show all available commands'));
+      spacing.section();
+    });
+  } else {
+    displayBanner();
+    console.log(typography.title('Get started with VulnZap'));
+    spacing.section();
+    console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
+    console.log(typography.muted('  vulnzap help                Show all available commands'));
+    spacing.section();
+  }
 }
 
 // Helper function to detect installed IDEs
