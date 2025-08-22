@@ -17,16 +17,16 @@ export async function startTUI() {
     title: 'VulnZap — Secure AI Development',
   }) as ScreenWithKeys;
 
-  const layout = blessed.layout({ parent: screen, width: '100%', height: '100%', layout: 'grid' });
-
   const sidebar = blessed.list({
-    parent: layout,
+    parent: screen,
     label: ' Menu ',
     mouse: true,
     keys: true,
     vi: true,
-    width: '24%',
-    height: '100%',
+    top: 0,
+    left: 0,
+    width: '26%',
+    height: '100%-1',
     border: 'line',
     style: {
       selected: { bg: 'cyan', fg: 'black' },
@@ -44,9 +44,11 @@ export async function startTUI() {
   });
 
   const content = blessed.box({
-    parent: layout,
-    width: '76%',
-    height: '100%',
+    parent: screen,
+    top: 0,
+    left: '26%',
+    width: '74%',
+    height: '100%-1',
     border: 'line',
     label: ' VulnZap ',
     scrollable: true,
@@ -68,6 +70,8 @@ export async function startTUI() {
   });
 
   function write(text: string) {
+    // Clear any interactive children from previous views
+    content.children.forEach(ch => ch.detach());
     content.setContent(text);
     screen.render();
   }
@@ -99,7 +103,8 @@ export async function startTUI() {
   }
 
   async function drawSetup() {
-    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '95%', height: '90%' });
+    content.children.forEach(ch => ch.detach());
+    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '98%', height: '95%' });
     const label = blessed.text({ parent: form, tags: true, content: '{bold}Enter API Key{/bold}', top: 0, left: 0 });
     const input = blessed.textbox({ parent: form, top: 2, left: 0, width: '90%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
     const btn = blessed.button({ parent: form, mouse: true, keys: true, shrink: true, top: 6, left: 0, name: 'save', content: ' Save ', style: { bg: 'cyan', fg: 'black', focus: { bg: 'green' } } });
@@ -122,7 +127,8 @@ export async function startTUI() {
   }
 
   async function drawCheck() {
-    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '95%', height: '95%' });
+    content.children.forEach(ch => ch.detach());
+    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '98%', height: '95%' });
     blessed.text({ parent: form, tags: true, content: '{bold}Check Package{/bold}\nFormat: ecosystem:pkg@version', top: 0, left: 0 });
     const input = blessed.textbox({ parent: form, top: 3, left: 0, width: '80%', height: 3, inputOnFocus: true, border: 'line' });
     const btn = blessed.button({ parent: form, mouse: true, keys: true, shrink: true, top: 7, left: 0, content: ' Run ', style: { bg: 'cyan', fg: 'black' } });
