@@ -66,8 +66,10 @@ export async function startTUI() {
     width: '100%',
     tags: true,
     style: { bg: 'black', fg: 'gray' },
-    content: ' j/k or ↑/↓ to navigate • Enter to select • q to quit',
+    content: ' j/k or ↑/↓ to navigate • Space to toggle • Enter to select • Tab to switch • q to quit',
   });
+
+  let lastInteractive: blessed.Widgets.BlessedElement | blessed.Widgets.ListElement | null = null;
 
   function write(text: string) {
     content.setContent(text);
@@ -126,6 +128,7 @@ export async function startTUI() {
 
     // focus input by default
     input.focus();
+    lastInteractive = input;
     screen.render();
   }
 
@@ -245,7 +248,7 @@ export async function startTUI() {
     if (!key) {
       step('Authentication', 'Choose a sign-in method:');
       const list = blessed.list({ parent: content, top: 4, left: 2, width: '80%', height: 4, keys: true, mouse: true, vi: true, border: 'line', items: ['Login with browser (recommended)', 'Enter API key manually'] });
-      list.focus(); screen.render();
+      list.focus(); lastInteractive = list; screen.render();
       await new Promise<void>(resolve => {
         list.on('select', async (it: any) => {
           const choice = it.getText();
@@ -259,7 +262,7 @@ export async function startTUI() {
             }).catch(() => { append(`\n{red-fg}Auth failed{/red-fg}`); screen.render(); resolve(); });
           } else {
             const input = blessed.textbox({ parent: content, top: 4, left: 2, width: '80%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
-            input.focus(); screen.render();
+            input.focus(); lastInteractive = input; screen.render();
             input.readInput(async (err, value) => {
               input.detach();
               if (value) await saveKey(value.trim());
@@ -282,7 +285,7 @@ export async function startTUI() {
     const selectable = ['cursor', 'windsurf', 'vscode'].filter(n => ides.includes(n));
     if (selectable.length) {
       const checklist = blessed.list({ parent: content, top: 6, left: 2, width: '80%', height: 6, keys: true, mouse: true, vi: true, border: 'line', items: selectable.map(n => `☐ ${n}`) });
-      checklist.focus(); screen.render();
+      checklist.focus(); lastInteractive = checklist; screen.render();
       const chosen = await new Promise<string[]>((resolve) => {
         const set = new Set<string>();
         checklist.on('keypress', (ch, key) => {
@@ -405,6 +408,20 @@ export async function startTUI() {
     content.children.forEach(ch => ch.detach());
     const fn = actions[label];
     if (fn) await fn(); else await drawWelcome();
+    if (lastInteractive && (lastInteractive as any).focus) {
+      (lastInteractive as any).focus();
+    } else {
+      sidebar.focus();
+    }
+  });
+
+  screen.key(['tab'], () => {
+    if (screen.focused === sidebar && lastInteractive && (lastInteractive as any).focus) {
+      (lastInteractive as any).focus();
+    } else {
+      sidebar.focus();
+    }
+    screen.render();
   });
 
   screen.key(['q', 'C-c'], () => screen.destroy());
