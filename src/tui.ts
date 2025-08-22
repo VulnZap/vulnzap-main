@@ -1,11 +1,13 @@
 import blessed from 'blessed';
 import { batchScan } from './api/batchScan.js';
 import * as api from './api/apis.js';
+import * as auth from './api/auth.js';
 import { getKey, saveKey } from './api/auth.js';
 import { extractPackagesFromDirectory } from './utils/packageExtractor.js';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
+import { execSync } from 'child_process';
 
 type ScreenWithKeys = blessed.Widgets.Screen & { key: (keys: string | string[], cb: () => void) => void };
 
@@ -23,9 +25,7 @@ export async function startTUI() {
     mouse: true,
     keys: true,
     vi: true,
-    top: 0,
-    left: 0,
-    width: '26%',
+    width: '24%',
     height: '100%-1',
     border: 'line',
     style: {
@@ -33,6 +33,7 @@ export async function startTUI() {
       item: { hover: { bg: 'gray' } },
     },
     items: [
+      ' Quick Setup',
       ' Welcome',
       ' Setup',
       ' Status',
@@ -45,9 +46,8 @@ export async function startTUI() {
 
   const content = blessed.box({
     parent: screen,
-    top: 0,
-    left: '26%',
-    width: '74%',
+    left: '24%',
+    width: '76%',
     height: '100%-1',
     border: 'line',
     label: ' VulnZap ',
@@ -70,9 +70,13 @@ export async function startTUI() {
   });
 
   function write(text: string) {
-    // Clear any interactive children from previous views
-    content.children.forEach(ch => ch.detach());
     content.setContent(text);
+    screen.render();
+  }
+
+  function append(text: string) {
+    const current = (content.getContent?.() as string) || '';
+    content.setContent(current + text);
     screen.render();
   }
 
@@ -103,8 +107,7 @@ export async function startTUI() {
   }
 
   async function drawSetup() {
-    content.children.forEach(ch => ch.detach());
-    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '98%', height: '95%' });
+    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '95%', height: '90%' });
     const label = blessed.text({ parent: form, tags: true, content: '{bold}Enter API Key{/bold}', top: 0, left: 0 });
     const input = blessed.textbox({ parent: form, top: 2, left: 0, width: '90%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
     const btn = blessed.button({ parent: form, mouse: true, keys: true, shrink: true, top: 6, left: 0, name: 'save', content: ' Save ', style: { bg: 'cyan', fg: 'black', focus: { bg: 'green' } } });
@@ -126,9 +129,197 @@ export async function startTUI() {
     screen.render();
   }
 
+  // ---------- Quick Setup (Magical Flow)
+  function step(title: string, body: string) {
+    write(`{bold}${title}{/bold}\n\n${body}`);
+  }
+
+  function detectInstalledIDEs(): string[] {
+    const installed: string[] = [];
+    const supported = [
+      { name: 'vscode', cmd: 'code' },
+      { name: 'cursor', cmd: 'cursor' },
+      { name: 'windsurf', cmd: 'windsurf' },
+    ];
+    for (const ide of supported) {
+      try { execSync(`${ide.cmd} --version`, { stdio: 'pipe' }); installed.push(ide.name); continue; } catch {}
+      const resolved = resolveIDECLIPath(ide.name);
+      if (resolved) installed.push(ide.name);
+    }
+    return installed;
+  }
+
+  function resolveVSCodeCLIPath(): string | null {
+    const platform = os.platform();
+    const candidates: string[] = [];
+    if (platform === 'darwin') {
+      candidates.push('/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code');
+      candidates.push('/opt/homebrew/bin/code');
+      candidates.push('/usr/local/bin/code');
+    } else if (platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+      candidates.push(path.join(localAppData, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'));
+    } else {
+      candidates.push('/usr/bin/code'); candidates.push('/snap/bin/code');
+    }
+    for (const p of candidates) { try { if (fs.existsSync(p)) return p; } catch {} }
+    return null;
+  }
+
+  function resolveIDECLIPath(ide: string): string | null {
+    if (ide === 'vscode') return resolveVSCodeCLIPath();
+    const platform = os.platform();
+    const candidates: string[] = [];
+    if (ide === 'cursor') {
+      if (platform === 'darwin') {
+        candidates.push('/Applications/Cursor.app/Contents/Resources/app/bin/cursor');
+      } else if (platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+        candidates.push(path.join(localAppData, 'Programs', 'Cursor', 'bin', 'cursor.exe'));
+      } else {
+        candidates.push('/usr/bin/cursor'); candidates.push('/snap/bin/cursor');
+      }
+    } else if (ide === 'windsurf') {
+      if (platform === 'darwin') {
+        candidates.push('/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf');
+      } else if (platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+        candidates.push(path.join(localAppData, 'Programs', 'Windsurf', 'bin', 'windsurf.exe'));
+      } else {
+        candidates.push('/usr/bin/windsurf'); candidates.push('/snap/bin/windsurf');
+      }
+    }
+    for (const p of candidates) { try { if (fs.existsSync(p)) return p; } catch {} }
+    return null;
+  }
+
+  function quote(cmd: string) { return cmd.includes(' ') ? `"${cmd}"` : cmd; }
+
+  function tryInstallExtension(ide: 'vscode'|'cursor'|'windsurf') {
+    const extensionId = 'vulnzap.vulnzap';
+    let cmd = ide === 'vscode' ? 'code' : ide;
+    try { execSync(`${cmd} --version`, { stdio: 'pipe' }); } catch {
+      const resolved = resolveIDECLIPath(ide);
+      if (!resolved) return { success: false, message: `${ide} CLI not found` };
+      cmd = quote(resolved);
+    }
+    try { execSync(`${cmd} --install-extension ${extensionId}`, { stdio: 'pipe' }); return { success: true }; }
+    catch (e: any) { return { success: false, message: e?.message || 'install failed' }; }
+  }
+
+  async function connectIDE(ide: 'cursor'|'windsurf') {
+    const home = os.homedir();
+    const apiKey = await getKey();
+    if (ide === 'cursor') {
+      const cursorDir = path.join(home, '.cursor');
+      if (!fs.existsSync(cursorDir)) fs.mkdirSync(cursorDir, { recursive: true });
+      const cursorMcp = path.join(cursorDir, 'mcp.json');
+      let cfg: any = {};
+      if (fs.existsSync(cursorMcp)) { try { cfg = JSON.parse(fs.readFileSync(cursorMcp, 'utf8')); } catch { cfg = {}; } }
+      cfg.mcpServers = cfg.mcpServers || {};
+      cfg.mcpServers.VulnZap = { url: 'https://vulnzap.com/mcp/sse', headers: { 'x-api-key': apiKey } };
+      fs.writeFileSync(cursorMcp, JSON.stringify(cfg, null, 2));
+      return;
+    }
+    if (ide === 'windsurf') {
+      const dir = path.join(home, '.codeium', 'windsurf');
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      const cfgFile = path.join(dir, 'mcp_config.json');
+      let cfg: any = { mcpServers: {} };
+      if (fs.existsSync(cfgFile)) { try { cfg = JSON.parse(fs.readFileSync(cfgFile, 'utf8')); } catch {} }
+      cfg.mcpServers = cfg.mcpServers || {};
+      cfg.mcpServers.VulnZap = { url: 'https://vulnzap.com/mcp/sse', headers: { 'x-api-key': apiKey } };
+      fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2));
+      return;
+    }
+  }
+
+  async function quickSetup() {
+    // Step 1: Health check
+    step('Checking VulnZap', 'Verifying server availability...');
+    const healthy = await api.checkHealth().then(h => h?.status === 'ok').catch(() => false);
+    append(`\nServer: ${healthy ? '{green-fg}Healthy{/green-fg}' : '{yellow-fg}Unavailable (will fallback){/yellow-fg}'}\n`);
+
+    // Step 2: Authentication
+    let key = await getKey().catch(() => null);
+    if (!key) {
+      step('Authentication', 'Choose a sign-in method:');
+      const list = blessed.list({ parent: content, top: 4, left: 2, width: '80%', height: 4, keys: true, mouse: true, vi: true, border: 'line', items: ['Login with browser (recommended)', 'Enter API key manually'] });
+      list.focus(); screen.render();
+      await new Promise<void>(resolve => {
+        list.on('select', async (it: any) => {
+          const choice = it.getText();
+          list.detach();
+          if (choice.startsWith('Login')) {
+            write('{gray-fg}Opening browser for authentication...{/gray-fg}');
+            auth.login('login').then(async (res: any) => {
+              if (res?.success) { append('\n{green-fg}Authentication successful{/green-fg}'); resolve(); }
+              else { append(`\n{red-fg}Auth failed{/red-fg}`); resolve(); }
+              screen.render();
+            }).catch(() => { append(`\n{red-fg}Auth failed{/red-fg}`); screen.render(); resolve(); });
+          } else {
+            const input = blessed.textbox({ parent: content, top: 4, left: 2, width: '80%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
+            input.focus(); screen.render();
+            input.readInput(async (err, value) => {
+              input.detach();
+              if (value) await saveKey(value.trim());
+              append(value ? '\n{green-fg}API key saved{/green-fg}' : '\n{yellow-fg}No key entered{/yellow-fg}');
+              screen.render(); resolve();
+            });
+          }
+        });
+      });
+    } else {
+      append('\nAuth: {green-fg}Configured{/green-fg}\n');
+    }
+
+    // Step 3: IDEs
+    step('IDE Integration', '{gray-fg}Detecting installed IDEs...{/gray-fg}');
+    const ides = detectInstalledIDEs();
+    append(`\nFound: ${ides.length ? ides.join(', ') : 'none'}`);
+    screen.render();
+
+    const selectable = ['cursor', 'windsurf', 'vscode'].filter(n => ides.includes(n));
+    if (selectable.length) {
+      const checklist = blessed.list({ parent: content, top: 6, left: 2, width: '80%', height: 6, keys: true, mouse: true, vi: true, border: 'line', items: selectable.map(n => `☐ ${n}`) });
+      checklist.focus(); screen.render();
+      const chosen = await new Promise<string[]>((resolve) => {
+        const set = new Set<string>();
+        checklist.on('keypress', (ch, key) => {
+          // @ts-ignore blessed typings
+          const idx = (checklist as any).selected || 0;
+          const name = selectable[idx];
+          if (key?.name === 'space') {
+            if (set.has(name)) { set.delete(name); (checklist as any).setItem(idx, `☐ ${name}`); }
+            else { set.add(name); (checklist as any).setItem(idx, `☑ ${name}`); }
+            screen.render();
+          }
+          if (key?.name === 'enter') { checklist.detach(); resolve(Array.from(set)); }
+        });
+      });
+
+      for (const ide of chosen as ('cursor'|'windsurf'|'vscode')[]) {
+        append(`\nConfiguring {cyan-fg}${ide}{/cyan-fg}...`);
+        screen.render();
+        if (ide === 'cursor' || ide === 'windsurf') {
+          try { await connectIDE(ide); append(' {green-fg}MCP configured{/green-fg}'); } catch { append(' {red-fg}MCP config failed{/red-fg}'); }
+        }
+        const res = tryInstallExtension(ide);
+        append(res.success ? ' {green-fg}Extension installed{/green-fg}' : ` {yellow-fg}${res.message}{/yellow-fg}`);
+        screen.render();
+      }
+    } else {
+      append('\n{yellow-fg}No supported IDEs detected. You can configure manually later.{/yellow-fg}');
+    }
+
+    // Step 4: Finish
+    append('\n\n{bold}All set.{/bold} Your environment is secured.');
+    append('\nPress q to quit or use the menu to explore.');
+    screen.render();
+  }
+
   async function drawCheck() {
-    content.children.forEach(ch => ch.detach());
-    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '98%', height: '95%' });
+    const form = blessed.form({ parent: content, keys: true, mouse: true, left: 1, top: 1, width: '95%', height: '95%' });
     blessed.text({ parent: form, tags: true, content: '{bold}Check Package{/bold}\nFormat: ecosystem:pkg@version', top: 0, left: 0 });
     const input = blessed.textbox({ parent: form, top: 3, left: 0, width: '80%', height: 3, inputOnFocus: true, border: 'line' });
     const btn = blessed.button({ parent: form, mouse: true, keys: true, shrink: true, top: 7, left: 0, content: ' Run ', style: { bg: 'cyan', fg: 'black' } });
@@ -199,6 +390,7 @@ export async function startTUI() {
   }
 
   const actions: Record<string, () => Promise<void>> = {
+    ' Quick Setup': quickSetup,
     ' Welcome': drawWelcome,
     ' Setup': drawSetup,
     ' Status': drawStatus,
@@ -217,7 +409,7 @@ export async function startTUI() {
 
   screen.key(['q', 'C-c'], () => screen.destroy());
 
-  await drawWelcome();
+  await quickSetup();
   sidebar.focus();
   screen.render();
 }
