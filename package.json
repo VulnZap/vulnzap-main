@@ -56,8 +56,10 @@
   "dependencies": {
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.12.1",
+    "@types/blessed": "^0.1.25",
     "@xmldom/xmldom": "^0.9.8",
     "axios": "^1.9.0",
+    "blessed": "^0.1.81",
     "chalk": "^5.4.1",
     "commander": "^11.1.0",
     "conf": "^11.0.2",

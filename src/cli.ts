@@ -19,6 +19,7 @@ import { execSync } from 'child_process';
 import { cacheService } from './services/cache.js';
 import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
 import { getMockProfile } from './utils/mockUser.js';
+import { startTUI } from './tui.js';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -1124,6 +1125,19 @@ program
     // Also show the default commander help for detailed options
     console.log(chalk.gray('Detailed command options:'));
     program.help();
+  });
+
+// Command: vulnzap ui (full-screen TUI)
+program
+  .command('ui')
+  .description('Launch the full-screen terminal UI')
+  .action(async () => {
+    try {
+      await startTUI();
+    } catch (error: any) {
+      console.error(typography.error('TUI failed:'), error.message);
+      process.exit(1);
+    }
   });
 
 // Parse arguments
