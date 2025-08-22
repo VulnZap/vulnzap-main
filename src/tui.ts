@@ -141,7 +141,8 @@ export async function startTUI() {
 
   async function promptApiKey(): Promise<string | null> {
     return new Promise((resolve) => {
-      const modal = blessed.box({ parent: content, label: ' API Key ', border: 'line', top: 3, left: 2, width: '80%', height: 9, tags: true, keys: true });
+      // Attach to screen to avoid layout chain errors if content is updated
+      const modal = blessed.box({ parent: screen, label: ' API Key ', border: 'line', top: 'center', left: 'center', width: '60%', height: 9, tags: true, keys: true, mouse: true });
       blessed.text({ parent: modal, top: 1, left: 1, content: 'Paste your API key (or Skip):' });
       const input = blessed.textbox({ parent: modal, top: 3, left: 1, width: '95%', height: 3, inputOnFocus: true, secret: true, censor: true, border: 'line' });
       const saveBtn = blessed.button({ parent: modal, top: 7, left: 1, shrink: true, mouse: true, keys: true, content: ' Save ', style: { bg: 'cyan', fg: 'black', focus: { bg: 'green' } } });
