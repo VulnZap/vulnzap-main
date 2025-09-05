@@ -18,14 +18,20 @@ export const config = {
   },
 
   auth: {
-    baseUrl: "https://vulnzap.com",
+    baseUrl: "http://localhost:3000",
   },
 
   // API endpoints
   api: {
-    engine: "https://engine.vulnzap.com",
+    engine: "http://localhost:3001",
     vulnerability: {
       batch: "/api/scan/dependency",
+    },
+    repo: {
+      scan: "/api/scan/github",
+    },
+    jobs: {
+      get: "/api/scan/jobs",
     },
   },
 };

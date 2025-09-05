@@ -19,6 +19,8 @@ import { execSync } from 'child_process';
 import { cacheService } from './services/cache.js';
 import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
 import { getMockProfile } from './utils/mockUser.js';
+import { startMcpServer } from './mcp/server.js';
+import { startRepoScan, getRepoScanStatus, getScanResults, streamScanEvents, ScanEvent } from './api/repoScan.js';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -1089,6 +1091,292 @@ program
     }
   });
 
+// Command: vulnzap mcp
+program
+  .command('mcp')
+  .description('Start the VulnZap MCP server for IDE integration')
+  .action(async () => {
+    try {
+      // Start the MCP server
+      await startMcpServer();
+    } catch (error: any) {
+      process.exit(1);
+    }
+  });
+
+// Command: vulnzap scan
+program
+  .command('scan <repoUrl>')
+  .description('Start a vulnerability scan for a GitHub repository')
+  .option('-b, --branch <branch>', 'Repository branch to scan', 'main')
+  .option('--wait', 'Wait for scan completion and show results')
+  .option('-o, --output <file>', 'Save scan results to a JSON file')
+  .action(async (repoUrl, options) => {
+    displayBanner();
+    console.log(typography.title('Repository Scan'));
+    console.log(typography.subtitle(`Scanning ${repoUrl}`));
+    spacing.line();
+
+    try {
+      const spinner = createSpinner('Initiating repository scan...');
+      spinner.start();
+
+      const result = await startRepoScan({
+        repoUrl,
+        branch: options.branch
+      });
+
+      spinner.succeed(typography.success('Scan initiated successfully'));
+
+      spacing.line();
+      console.log(typography.info('Scan Details:'));
+      console.log(typography.muted(`  Job ID: ${result.data.jobId}`));
+      console.log(typography.muted(`  Project ID: ${result.data.projectId}`));
+      console.log(typography.muted(`  Repository: ${result.data.repository}`));
+      console.log(typography.muted(`  Branch: ${result.data.branch}`));
+      console.log(typography.muted(`  Status: ${result.data.status}`));
+      console.log(typography.muted(`  Remaining line quota: ${result.data.remaining}`));
+      console.log(typography.muted(`  View Results at: https://vulnzap.com/dashboard/projects/${result.data.projectId}/${result.data.jobId}`));
+      // Save initial scan result to file if output option is provided
+      if (options.output) {
+        const scanResultData = {
+          jobId: result.data.jobId,
+          projectId: result.data.projectId,
+          repository: result.data.repository,
+          branch: result.data.branch,
+          status: result.data.status,
+          remaining: result.data.remaining,
+          message: result.data.message
+        };
+
+        try {
+          fs.writeFileSync(options.output, JSON.stringify(scanResultData, null, 2));
+          console.log(typography.muted(`  Results saved to: ${options.output}`));
+        } catch (error) {
+          console.log(typography.warning(`  Failed to save results to file: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        }
+      }
+
+      spacing.section();
+
+      if (options.wait) {
+        console.log(typography.info('Waiting for scan completion...'));
+        console.log(typography.muted('Connecting to real-time event stream...'));
+
+        let scanCompleted = false;
+
+        // Try Server-Sent Events first
+        try {
+          await streamScanEvents(
+            result.data.jobId,
+            async (event: ScanEvent) => {
+              switch (event.type) {
+                case 'connected':
+                  console.log(typography.success('  🔗 Connected to scan progress stream'));
+                  if (event.data.jobStatus) {
+                    console.log(typography.muted(`     Status: ${event.data.jobStatus}`));
+                  }
+                  if (event.data.progress !== undefined) {
+                    console.log(typography.muted(`     Progress: ${event.data.progress}%`));
+                  }
+                  spacing.line();
+                  break;
+
+                case 'progress':
+                  if (event.data.message) {
+                    // Handle different types of progress messages
+                    const message = event.data.message;
+                    
+                    if (message.includes('Scan started for')) {
+                      console.log(typography.info(`  📁 ${message}`));
+                    } else if (message.includes('Analyzing dependencies')) {
+                      console.log(typography.muted(`  🔍 ${message}`));
+                    } else if (message.includes('Magic tree built')) {
+                      console.log(typography.muted(`  🌳 ${message}`));
+                    } else if (message.includes('Generating comprehensive')) {
+                      console.log(typography.muted(`  📊 ${message}`));
+                    } else if (message.includes('Total lines scanned')) {
+                      console.log(typography.info(`  📈 ${message}`));
+                    } else if (message.includes('Scan completed for') && message.includes('vulnerabilities found')) {
+                      console.log(typography.success(`  📋 ${message}`));
+                    } else {
+                      console.log(typography.muted(`  ℹ️  ${message}`));
+                    }
+                  }
+                  break;
+
+                case 'vulnerability':
+                  if (event.data) {
+                    const vuln = event.data;
+                    const severityColor = vuln.severity === 'critical' ? typography.error : 
+                                        vuln.severity === 'high' ? typography.warning :
+                                        vuln.severity === 'medium' ? typography.info : typography.muted;
+                    
+                    console.log(severityColor(`  🚨 ${vuln.severity.toUpperCase()}: ${vuln.title}`));
+                    console.log(typography.muted(`     File: ${vuln.file}`));
+                    console.log(typography.muted(`     Line: ${vuln.line}`));
+                    console.log(typography.muted(`     Description: ${vuln.description}`));
+                    spacing.line();
+                  }
+                  break;
+
+                case 'completed':
+                  console.log(typography.success('  ✅ Scan completed!'));
+                  console.log(typography.muted('  📥 Fetching detailed results...'));
+                  
+                  try {
+                    // Fetch detailed results from jobs endpoint
+                    const detailedResults = await getScanResults(result.data.jobId);
+                    
+                    // Save detailed results to file if output option is provided
+                    if (options.output) {
+                      const finalResultData = {
+                        jobId: result.data.jobId,
+                        projectId: result.data.projectId,
+                        repository: result.data.repository,
+                        branch: result.data.branch,
+                        status: 'completed',
+                        completedAt: new Date().toISOString(),
+                        message: event.data.message,
+                        detailedResults: detailedResults
+                      };
+
+                      try {
+                        fs.writeFileSync(options.output, JSON.stringify(finalResultData, null, 2));
+                        console.log(typography.success(`  💾 Results saved to: ${options.output}`));
+                      } catch (error) {
+                        console.log(typography.warning(`  ⚠️  Failed to save results to file: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                      }
+                    }
+                  } catch (error) {
+                    console.log(typography.warning(`  ⚠️  Could not fetch detailed results: ${error instanceof Error ? error.message : 'Unknown error'}`));
+                  }
+                  
+                  scanCompleted = true;
+                  // Exit immediately after completion
+                  process.exit(0);
+                  break;
+
+                case 'failed':
+                  console.log(typography.error('  ❌ Scan failed'));
+                  if (event.data.message) {
+                    console.log(typography.muted(`     ${event.data.message}`));
+                  }
+                  scanCompleted = true;
+                  // Exit with error code on failure
+                  process.exit(1);
+                  break;
+              }
+            },
+            async (error) => {
+              console.log(typography.warning(`  Event stream error: ${error.message}`));
+              console.log(typography.muted('  Falling back to polling...'));
+
+              // Fallback to polling
+              await fallbackToPolling(result.data.jobId);
+              scanCompleted = true;
+            }
+          );
+        } catch (error) {
+          console.log(typography.warning(`  Could not connect to event stream: ${error instanceof Error ? error.message : 'Unknown error'}`));
+          console.log(typography.muted('  Falling back to polling...'));
+
+          // Fallback to polling
+          await fallbackToPolling(result.data.jobId);
+          scanCompleted = true;
+        }
+
+        // Wait for completion if still running
+        while (!scanCompleted) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+
+        // Get final status for file saving
+        try {
+          const finalStatus = await getRepoScanStatus(result.data.jobId);
+
+          if (finalStatus.data.status === 'completed') {
+            console.log(typography.success('Scan completed!'));
+            console.log(typography.muted('View detailed results at: https://vulnzap.com/dashboard/scans'));
+          } else if (finalStatus.data.status === 'failed') {
+            console.log(typography.error('Scan failed'));
+            console.log(typography.muted(finalStatus.data.message || 'Unknown error occurred'));
+          }
+
+          // Save final results to file if output option is provided
+          if (options.output) {
+            const finalResultData = {
+              jobId: finalStatus.data.jobId,
+              projectId: finalStatus.data.projectId,
+              repository: finalStatus.data.repository,
+              branch: finalStatus.data.branch,
+              status: finalStatus.data.status,
+              completedAt: new Date().toISOString(),
+              message: finalStatus.data.message,
+              remaining: finalStatus.data.remaining
+            };
+
+            try {
+              fs.writeFileSync(options.output, JSON.stringify(finalResultData, null, 2));
+              console.log(typography.muted(`  Final results saved to: ${options.output}`));
+            } catch (error) {
+              console.log(typography.warning(`  Failed to save final results to file: ${error instanceof Error ? error.message : 'Unknown error'}`));
+            }
+          }
+        } catch (error) {
+          console.log(typography.warning(`  Could not get final status: ${error instanceof Error ? error.message : 'Unknown error'}`));
+        }
+      } else {
+        console.log(typography.info('Next Steps:'));
+        console.log(typography.muted('  • Monitor progress at https://vulnzap.com/dashboard/scans'));
+        console.log(typography.muted('  • Use --wait flag to wait for completion'));
+        console.log(typography.muted(`  • Job ID: ${result.data.jobId}`));
+      }
+
+    } catch (error: any) {
+      console.error(typography.error('Scan failed:'), error.message);
+      spacing.line();
+      console.log(typography.info('Troubleshooting:'));
+      console.log(typography.muted('  • Ensure the repository URL is correct (https://github.com/owner/repo)'));
+      console.log(typography.muted('  • Check your API key with: vulnzap status'));
+      console.log(typography.muted('  • Verify repository is public or you have access'));
+      process.exit(1);
+    }
+  });
+
+// Helper function for fallback polling when SSE is not available
+async function fallbackToPolling(scanId: string): Promise<void> {
+  const maxAttempts = 120; // 10 minutes with 5-second intervals
+  let attempts = 0;
+
+  while (attempts < maxAttempts) {
+    attempts++;
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+    try {
+      const scanStatus = await getRepoScanStatus(scanId);
+      console.log(typography.muted(`  Status: ${scanStatus.data.status} (${attempts}/${maxAttempts})`));
+
+      if (scanStatus.data.status === 'completed' || scanStatus.data.status === 'failed') {
+        if (scanStatus.data.status === 'completed') {
+          console.log(typography.success('  ✅ Scan completed!'));
+        } else {
+          console.log(typography.error('  ❌ Scan failed'));
+          if (scanStatus.data.message) {
+            console.log(typography.muted(`     ${scanStatus.data.message}`));
+          }
+        }
+        return;
+      }
+    } catch (error) {
+      console.log(typography.warning(`  Failed to check status: ${error instanceof Error ? error.message : 'Unknown error'}`));
+    }
+  }
+
+  console.log(typography.warning('  Scan is still processing...'));
+  console.log(typography.muted('  Check progress at: https://vulnzap.com/dashboard/scans'));
+}
+
 // Command: vulnzap help
 program
   .command('help')
@@ -1105,6 +1393,8 @@ program
     console.log('  connect                   Connect VulnZap to your AI-powered IDE');
     console.log('  check <package>           Check a package for vulnerabilities');
     console.log('  batch-scan                Scan all packages in current directory');
+    console.log('  scan <repo>               Start repository vulnerability scan');
+    console.log('  mcp                       Start MCP server for IDE integration');
     console.log('  status                    Check VulnZap server health');
     console.log('  account                   View account information');
     console.log('  help                      Display this help information');
@@ -1114,6 +1404,8 @@ program
     console.log('  vulnzap check npm:express@4.17.1               # Check specific package');
     console.log('  vulnzap setup -k your-api-key                  # Manual API key setup');
     console.log('  vulnzap connect --ide cursor                   # Connect to Cursor IDE');
+    console.log('  vulnzap scan https://github.com/user/repo      # Scan a GitHub repository');
+    console.log('  vulnzap mcp                                    # Start MCP server for IDE integration');
     console.log('');
     console.log(chalk.cyan('Need Help?'));
     console.log('  Documentation: https://vulnzap.com/docs');
@@ -1163,6 +1455,7 @@ async function detectInstalledIDEs(): Promise<string[]> {
 // Helper function to install IDE extensions
 async function installIDEExtension(ide: string) {
   try {
+    const extensionId = 'vulnzap.vulnzap';
     if (ide === 'vscode') {
       // Check if VS Code CLI is available
       try {
@@ -1179,7 +1472,6 @@ async function installIDEExtension(ide: string) {
       }
 
       // Install the VulnZap extension
-      const extensionId = 'vulnzap.vulnzap';
       try {
         execSync(`code --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
@@ -1210,22 +1502,67 @@ async function installIDEExtension(ide: string) {
         };
       }
     } else if (ide === 'cursor') {
-      // For Cursor, provide manual installation instructions
-      return {
-        success: true,
-        instructions: [
-          'Cursor Extension Installation',
-          '',
-          'Cursor uses the same extension marketplace as VS Code.',
-          'To install the VulnZap extension:',
-          '  1. Open Cursor',
-          '  2. Go to Extensions (Ctrl+Shift+X)',
-          '  3. Search for "VulnZap"',
-          '  4. Install the extension',
-          '',
-          'The extension will automatically use your API key for scanning.'
-        ]
-      };
+      try {
+        // Cursor uses the same extension marketplace as VS Code
+        execSync(`cursor --install-extension ${extensionId}`, { stdio: 'pipe' });
+        return {
+          success: true,
+          instructions: [
+            'Cursor Extension Installation',
+            '',
+            'Cursor uses the OpenVSX extension marketplace',
+            'To install the VulnZap extension:',
+            '  1. Open Cursor',
+            '  2. Go to Extensions',
+            '  3. Search for "VulnZap" in the Marketplace',
+            '  4. Install the extension',
+            '',
+            'The extension will automatically use your API key for scanning.'
+          ]
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: 'Extension not available in marketplace',
+          instructions: [
+            'VulnZap extension not yet available in marketplace',
+            'Manual installation will be available soon.',
+            'Visit https://vulnzap.com/extension for updates',
+            'Or install the extension manually from the marketplace'
+          ]
+        };
+      }
+    } else if (ide === 'windsurf') {
+      try {
+        // Cursor uses the same extension marketplace as VS Code
+        execSync(`windsurf --install-extension ${extensionId}`, { stdio: 'pipe' });
+        return {
+          success: true,
+          instructions: [
+            'Windsurf Extension Installation',
+            '',
+            'Windsurf uses the OpenVSX extension marketplace',
+            'To install the VulnZap extension:',
+            '  1. Open Windsurf',
+            '  2. Go to Extensions',
+            '  3. Search for "VulnZap" in the Marketplace',
+            '  4. Install the extension',
+            '',
+            'The extension will automatically use your API key for scanning.',
+          ]
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: 'Extension not available in marketplace',
+          instructions: [
+            'VulnZap extension not yet available in marketplace',
+            'Manual installation will be available soon.',
+            'Visit https://vulnzap.com/extension for updates',
+            'Or install the extension manually from the marketplace'
+          ]
+        };
+      }
     } else {
       return {
         success: false,
@@ -1284,9 +1621,10 @@ async function connectIDE(ide: string) {
 
     // Add VulnZap configuration
     cursorMcpConfig.mcpServers.VulnZap = {
-      url: "https://vulnzap.com/mcp/sse",
-      headers: {
-        "x-api-key": apiKey
+      command: "npx",
+      args: ["vulnzap", "mcp"],
+      env: {
+        "VULNZAP_API_KEY": apiKey
       }
     };
 
@@ -1302,7 +1640,7 @@ async function connectIDE(ide: string) {
     spacing.section();
     console.log(typography.info('Configuration Summary'));
     console.log(typography.muted('  MCP Server Name: VulnZap'));
-    console.log(typography.muted('  Transport Type: SSE'));
+    console.log(typography.muted('  Transport Type: STDIO'));
     console.log(typography.muted('  Auto-approved Tools: auto-vulnerability-scan, scan_repo'));
     console.log(typography.muted('  Network Timeout: 60 seconds'));
     spacing.section();
@@ -1336,9 +1674,10 @@ async function connectIDE(ide: string) {
       windsurfMcpConfig.mcpServers = {};
     }
     windsurfMcpConfig.mcpServers.VulnZap = {
-      url: "https://vulnzap.com/mcp/sse",
-      headers: {
-        "x-api-key": apiKey
+      command: "npx",
+      args: ["vulnzap", "mcp"],
+      env: {
+        "VULNZAP_API_KEY": apiKey
       }
     };
     fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
@@ -1385,9 +1724,10 @@ async function connectIDE(ide: string) {
 
     // Configure VulnZap MCP server with STDIO transport
     clineMcpConfig.mcpServers.VulnZap = {
-      url: "https://vulnzap.com/mcp/sse",
-      headers: {
-        "x-api-key": apiKey
+      command: "npx",
+      args: ["vulnzap", "mcp"],
+      env: {
+        "VULNZAP_API_KEY": apiKey
       },
       alwaysAllow: ["auto-vulnerability-scan"],
       disabled: false,
@@ -1432,9 +1772,10 @@ async function connectIDE(ide: string) {
     console.log(typography.code(`{
   "mcpServers": {
     "VulnZap": {
-      "url": "https://vulnzap.com/mcp/sse",
-      "headers": {
-        "x-api-key": "${apiKey}"
+      "command": "npx",
+      "args": ["vulnzap", "mcp"],
+      "env": {
+        "VULNZAP_API_KEY": "${apiKey}"
       }
     }
   }
