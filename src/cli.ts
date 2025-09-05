@@ -1445,11 +1445,108 @@ async function detectInstalledIDEs(): Promise<string[]> {
       await execSync(`${ide.command} --version`, { stdio: 'pipe' });
       installedIDEs.push(ide.name);
     } catch (error) {
-      // IDE not installed, skip
+      // Fallback detection for VS Code when CLI is not on PATH
+      const resolved = resolveIDECLIPath(ide.name);
+      if (resolved) {
+        installedIDEs.push(ide.name);
+      }
     }
   }
 
   return installedIDEs;
+}
+
+// Resolve VS Code CLI path when 'code' is not on PATH
+function resolveVSCodeCLIPath(): string | null {
+  const platform = os.platform();
+  const candidates: string[] = [];
+
+  if (platform === 'darwin') {
+    candidates.push('/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code');
+    candidates.push('/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code');
+    candidates.push(join(os.homedir(), 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'));
+    candidates.push(join(os.homedir(), 'Applications', 'Visual Studio Code - Insiders.app', 'Contents', 'Resources', 'app', 'bin', 'code'));
+    candidates.push('/usr/local/bin/code');
+    candidates.push('/opt/homebrew/bin/code');
+  } else if (platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
+    candidates.push(join(localAppData, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'));
+    candidates.push('C\\\:\\\Program Files\\\Microsoft VS Code\\\bin\\\code.cmd');
+    candidates.push('C\\\:\\\Program Files (x86)\\\Microsoft VS Code\\\bin\\\code.cmd');
+  } else {
+    candidates.push('/usr/bin/code');
+    candidates.push('/snap/bin/code');
+  }
+
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function resolveIDECLIPath(ide: string): string | null {
+  if (ide === 'vscode') return resolveVSCodeCLIPath();
+  const platform = os.platform();
+  const candidates: string[] = [];
+  if (ide === 'cursor') {
+    if (platform === 'darwin') {
+      candidates.push('/Applications/Cursor.app/Contents/Resources/app/bin/cursor');
+      candidates.push(join(os.homedir(), 'Applications', 'Cursor.app', 'Contents', 'Resources', 'app', 'bin', 'cursor'));
+    } else if (platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
+      candidates.push(join(localAppData, 'Programs', 'Cursor', 'bin', 'cursor.exe'));
+    } else {
+      candidates.push('/usr/bin/cursor');
+      candidates.push('/snap/bin/cursor');
+    }
+  } else if (ide === 'windsurf') {
+    if (platform === 'darwin') {
+      candidates.push('/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf');
+      candidates.push(join(os.homedir(), 'Applications', 'Windsurf.app', 'Contents', 'Resources', 'app', 'bin', 'windsurf'));
+    } else if (platform === 'win32') {
+      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
+      candidates.push(join(localAppData, 'Programs', 'Windsurf', 'bin', 'windsurf.exe'));
+    } else {
+      candidates.push('/usr/bin/windsurf');
+      candidates.push('/snap/bin/windsurf');
+    }
+  }
+  for (const p of candidates) {
+    try {
+      if (fs.existsSync(p)) return p;
+    } catch {}
+  }
+  return null;
+}
+
+function quoteCmdIfNeeded(cmd: string): string {
+  if (!cmd) return cmd;
+  return cmd.includes(' ') ? `"${cmd}"` : cmd;
+}
+
+// Best-effort symlink for VS Code CLI on macOS/Linux
+function tryEnsureVSCodeSymlink(codePath: string): void {
+  try {
+    const platform = os.platform();
+    if (platform === 'darwin' || platform === 'linux') {
+      const binTargets = platform === 'darwin'
+        ? ['/usr/local/bin/code', '/opt/homebrew/bin/code']
+        : ['/usr/local/bin/code'];
+
+      for (const target of binTargets) {
+        try {
+          const targetDir = path.dirname(target);
+          if (!fs.existsSync(target) && fs.existsSync(targetDir)) {
+            fs.symlinkSync(codePath, target);
+          }
+        } catch {}
+      }
+    }
+  } catch {}
 }
 
 // Helper function to install IDE extensions
@@ -1457,23 +1554,31 @@ async function installIDEExtension(ide: string) {
   try {
     const extensionId = 'vulnzap.vulnzap';
     if (ide === 'vscode') {
-      // Check if VS Code CLI is available
+      // Best-effort: ensure VS Code CLI available
+      let codeCmd = 'code';
       try {
-        execSync('code --version', { stdio: 'pipe' });
-      } catch (error) {
-        return { success: false, error: 'VS Code CLI not found', instructions: [
-          'VS Code CLI not found. Please ensure VS Code is installed and added to PATH.',
-          'To add VS Code to PATH:',
-          '  1. Open VS Code',
-          '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
-          '  3. Type "Shell Command: Install \'code\' command in PATH"',
-          '  4. Run the command and restart your terminal'
-        ]};
+        execSync(`${codeCmd} --version`, { stdio: 'pipe' });
+      } catch {
+        const resolved = resolveVSCodeCLIPath();
+        if (resolved) {
+          codeCmd = quoteCmdIfNeeded(resolved);
+          tryEnsureVSCodeSymlink(resolved);
+        } else {
+          return { success: false, error: 'VS Code CLI not found', instructions: [
+            'VS Code found but CLI not available in PATH.',
+            'We attempted automatic detection; manual PATH install may be required.',
+            'To add VS Code to PATH:',
+            '  1. Open VS Code',
+            '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
+            '  3. Type "Shell Command: Install \'code\' command in PATH"',
+            '  4. Run the command and restart your terminal'
+          ]};
+        }
       }
 
       // Install the VulnZap extension
       try {
-        execSync(`code --install-extension ${extensionId}`, { stdio: 'pipe' });
+        execSync(`${codeCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
           success: true,
           instructions: [
@@ -1502,64 +1607,68 @@ async function installIDEExtension(ide: string) {
         };
       }
     } else if (ide === 'cursor') {
+      // Install VulnZap extension for Cursor (resolve binary if not on PATH)
+      const extensionId = 'vulnzap.vulnzap';
+      const cursorCmd = quoteCmdIfNeeded(resolveIDECLIPath('cursor') || 'cursor');
       try {
-        // Cursor uses the same extension marketplace as VS Code
-        execSync(`cursor --install-extension ${extensionId}`, { stdio: 'pipe' });
+        execSync(`${cursorCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
           success: true,
           instructions: [
-            'Cursor Extension Installation',
+            'Cursor Extension Setup Complete',
+            '  Extension: VulnZap Security Scanner',
+            '  Auto-scan: Enabled for supported files',
+            '  API Integration: Configured with your account',
             '',
-            'Cursor uses the OpenVSX extension marketplace',
-            'To install the VulnZap extension:',
-            '  1. Open Cursor',
-            '  2. Go to Extensions',
-            '  3. Search for "VulnZap" in the Marketplace',
-            '  4. Install the extension',
-            '',
-            'The extension will automatically use your API key for scanning.'
+            'To use the extension:',
+            '  1. Open a project in Cursor',
+            '  2. Install dependencies or create new files',
+            '  3. VulnZap will automatically scan for vulnerabilities',
+            '  4. Check the Problems panel for security issues'
           ]
         };
-      } catch (error) {
+      } catch (installError) {
         return {
           success: false,
-          error: 'Extension not available in marketplace',
+          error: 'Extension installation failed',
           instructions: [
-            'VulnZap extension not yet available in marketplace',
+            'Cursor Extension Installation Failed',
             'Manual installation will be available soon.',
-            'Visit https://vulnzap.com/extension for updates',
-            'Or install the extension manually from the marketplace'
+            'Visit https://vulnzap.com/cursor for updates',
+            'Or try installing manually from the marketplace'
           ]
         };
       }
     } else if (ide === 'windsurf') {
+      // Install VulnZap extension for Windsurf (resolve binary if not on PATH)
+      const extensionId = 'vulnzap.vulnzap';
+      const windsurfCmd = quoteCmdIfNeeded(resolveIDECLIPath('windsurf') || 'windsurf');
       try {
-        // Cursor uses the same extension marketplace as VS Code
-        execSync(`windsurf --install-extension ${extensionId}`, { stdio: 'pipe' });
+        execSync(`${windsurfCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
         return {
           success: true,
           instructions: [
-            'Windsurf Extension Installation',
+            'Windsurf Extension Setup Complete',
+            '  Extension: VulnZap Security Scanner',
+            '  Auto-scan: Enabled for supported files',
+            '  API Integration: Configured with your account',
             '',
-            'Windsurf uses the OpenVSX extension marketplace',
-            'To install the VulnZap extension:',
-            '  1. Open Windsurf',
-            '  2. Go to Extensions',
-            '  3. Search for "VulnZap" in the Marketplace',
-            '  4. Install the extension',
-            '',
-            'The extension will automatically use your API key for scanning.',
+            'To use the extension:',
+            '  1. Open a project in Windsurf',
+            '  2. Install dependencies or create new files',
+            '  3. VulnZap will automatically scan for vulnerabilities',
+            '  4. Check the Problems panel for security issues'
           ]
         };
-      } catch (error) {
+      } catch (installError) {
         return {
           success: false,
-          error: 'Extension not available in marketplace',
+          error: 'Extension installation failed',
           instructions: [
-            'VulnZap extension not yet available in marketplace',
+            'Windsurf Extension Installation Failed',
             'Manual installation will be available soon.',
-            'Visit https://vulnzap.com/extension for updates',
-            'Or install the extension manually from the marketplace'
+            'Visit https://vulnzap.com/windsurf for updates',
+            'Or try installing manually from the marketplace'
           ]
         };
       }
@@ -1763,6 +1872,15 @@ async function connectIDE(ide: string) {
     console.log(typography.muted('  4. Install the extension'));
     spacing.line();
     console.log(typography.muted('The extension will automatically use your API key for scanning.'));
+    spacing.section();
+    // Experience messaging (concise, Apple-like tone)
+    console.log(typography.subtitle('Experience'));
+    console.log(typography.muted('  • Full experience: Cursor & Windsurf (with MCP server)'));
+    console.log(typography.muted('  • VS Code: Dev-focused inline & repo scans — no agent control'));
+    spacing.line();
+    console.log(typography.accent('For the best experience, use Cursor or Windsurf for now'));
+    spacing.line();
+    console.log(typography.muted('Coming soon: Cline, Roo Code, Kilo Code, Augment Code support'));
 
   } else {
     console.log(typography.info('Manual Configuration Required'));
