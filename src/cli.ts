@@ -1111,6 +1111,7 @@ program
   .option('-b, --branch <branch>', 'Repository branch to scan', 'main')
   .option('--wait', 'Wait for scan completion and show results')
   .option('-o, --output <file>', 'Save scan results to a JSON file')
+  .option('--key <key>', 'Use a specific API key')
   .action(async (repoUrl, options) => {
     displayBanner();
     console.log(typography.title('Repository Scan'));
@@ -1123,7 +1124,8 @@ program
 
       const result = await startRepoScan({
         repoUrl,
-        branch: options.branch
+        branch: options.branch,
+        key: options.key
       });
 
       spinner.succeed(typography.success('Scan initiated successfully'));
@@ -1212,7 +1214,7 @@ program
                                         vuln.severity === 'high' ? typography.warning :
                                         vuln.severity === 'medium' ? typography.info : typography.muted;
                     
-                    console.log(severityColor(`  🚨 ${vuln.severity.toUpperCase()}: ${vuln.title}`));
+                    console.log(severityColor(`  🚨 ${vuln.severity}: ${vuln.title}`));
                     console.log(typography.muted(`     File: ${vuln.file}`));
                     console.log(typography.muted(`     Line: ${vuln.line}`));
                     console.log(typography.muted(`     Description: ${vuln.description}`));

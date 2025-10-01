@@ -5,6 +5,7 @@ import { getKey } from './auth.js';
 export interface RepoScanRequest {
   repoUrl: string;
   branch?: string;
+  key?: string;
 }
 
 export interface RepoScanResponse {
@@ -31,7 +32,7 @@ export interface ScanEvent {
  * Start a repository vulnerability scan
  */
 export async function startRepoScan(request: RepoScanRequest): Promise<RepoScanResponse> {
-  const apiKey = await getKey();
+  const apiKey = request.key || await getKey();
   if (!apiKey) {
     throw new Error('VulnZap API key not configured. Please run "vulnzap setup" first.');
   }

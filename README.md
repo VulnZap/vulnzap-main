@@ -139,54 +139,6 @@ vulnzap secure [--ide <ide>] [--port <port>]
 #### Automatic IDE Detection
 The `init` command automatically detects which of the supported IDEs are installed on your system and allows you to select multiple IDEs for integration.
 
-## 🔌 MCP Tools Reference
-
-VulnZap provides several Model Context Protocol tools that integrate with your AI assistant:
-
-### 1. auto-vulnerability-scan
-**Purpose**: Automatically scans packages before installation
-**Usage**: Called automatically when AI suggests package installation
-```json
-{
-  "command": "npm install",
-  "ecosystem": "npm", 
-  "packageName": "express",
-  "version": "4.17.1"
-}
-```
-
-### 2. batch-scan
-**Purpose**: Scans all packages in a directory
-**Parameters**:
-- `directory`: Full path to scan
-- `ecosystem` (optional): Specific ecosystem filter
-
-### 3. amplify-feature-prompt
-**Purpose**: Enhances feature requests with security best practices
-**Parameters**:
-- `user_prompt`: The feature request
-- `project_type`: web_app, api, cli, library, etc.
-- `security_level`: high, medium, low
-- `tech_stack`: Array of technologies
-- `compliance_requirements`: GDPR, SOX, etc.
-
-### 4. get_docs
-**Purpose**: Retrieves security-focused documentation
-**Parameters**:
-- `package_name`: Package to document
-- `skill_level`: beginner, intermediate, advanced
-- `project_context`: Context for documentation
-- `learning_goals`: Array of learning objectives
-
-### 5. latest_toolset
-**Purpose**: Recommends up-to-date, secure packages
-**Parameters**:
-- `user_prompt`: Project description
-- `user_tools`: User's preferred tools
-- `agent_tools`: AI's suggested tools
-- `security_requirements`: Include security features
-- `performance_requirements`: Include performance optimizations
-
 ## 📂 Project Structure
 
 ```
@@ -215,49 +167,6 @@ vulnzap/
 └── README.md              # This file
 ```
 
-## 🔒 Security Features
-
-### OWASP Top 10 Coverage
-VulnZap automatically checks for and provides guidance on:
-- **A01:2021 – Broken Access Control**
-- **A02:2021 – Cryptographic Failures**  
-- **A03:2021 – Injection**
-- **A04:2021 – Insecure Design**
-- **A05:2021 – Security Misconfiguration**
-- **A06:2021 – Vulnerable and Outdated Components**
-- **A07:2021 – Identification and Authentication Failures**
-- **A08:2021 – Software and Data Integrity Failures**
-- **A09:2021 – Security Logging and Monitoring Failures**
-- **A10:2021 – Server-Side Request Forgery (SSRF)**
-
-### Vulnerability Data Sources
-- **GitHub Security Advisory Database**
-- **National Vulnerability Database (NVD)**
-- **OSV Database**
-- **Local vulnerability database**
-
-### Security Best Practices
-- Secure credential storage using system keychain
-- Encrypted API communications
-- Local caching with TTL expiration
-- Offline mode for air-gapped environments
-
-## 🏗️ Architecture
-
-### MCP Server Architecture
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   AI Assistant  │◄──►│   MCP Server    │◄──►│   VulnZap API   │
-│   (Cursor/etc)  │    │   (Local)       │    │   (Remote)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │  Local Cache    │
-                       │  (5-day TTL)    │
-                       └─────────────────┘
-```
-
 ### Package Detection Flow
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
@@ -280,15 +189,6 @@ VulnZap automatically checks for and provides guidance on:
 ```
 
 ## 🔧 Configuration
-
-### Environment Variables
-```bash
-# Required
-VULNZAP_API_KEY=your_api_key_here
-
-# Server configuration
-VULNZAP_SERVER_URL=https://api.vulnzap.com  # Override default server
-```
 
 ### IDE Configuration Files
 
@@ -340,24 +240,6 @@ npm run lint
 # Fix linting issues
 npm run lint:fix
 ```
-
-## 📈 Performance
-
-### Caching Strategy
-- **Local Cache**: 5-day TTL for vulnerability data
-- **Memory Cache**: In-memory caching for session data
-- **Smart Invalidation**: Automatic cache refresh on stale data
-
-### Response Times
-- **Cached Results**: < 50ms
-- **API Calls**: 200-500ms (depending on network)
-- **Batch Scans**: ~100ms per package (parallelized)
-
-### Resource Usage
-- **Memory**: ~50MB base usage
-- **Disk**: ~10MB cache directory
-- **Network**: Minimal (only when cache misses)
-
 ## 🔄 Development Workflow
 
 ### Building from Source
@@ -384,47 +266,6 @@ npm run cli
 6. Commit your changes: `git commit -m 'Add amazing feature'`
 7. Push to the branch: `git push origin feature/amazing-feature`
 8. Open a Pull Request
-
-## 📚 API Reference
-
-### Core Functions
-
-#### checkVulnerability(ecosystem, packageName, version, options)
-Scans a single package for vulnerabilities.
-```typescript
-const result = await checkVulnerability('npm', 'express', '4.17.1', {
-  useCache: true,
-  useAi: false
-});
-```
-
-#### checkBatch(packages)
-Scans multiple packages in parallel.
-```typescript
-const results = await checkBatch([
-  { packageName: 'express', ecosystem: 'npm', version: '4.17.1' },
-  { packageName: 'requests', ecosystem: 'pip', version: '2.25.1' }
-]);
-```
-
-#### extractPackagesFromDirectory(dirPath, ecosystem?)
-Extracts package information from project files.
-```typescript
-const packages = extractPackagesFromDirectory('./my-project', 'npm');
-```
-
-## 🌐 Ecosystem Support
-
-| Ecosystem | File Types | Status |
-|-----------|------------|---------|
-| **npm** | package.json | ✅ Full |
-| **pip** | requirements.txt, setup.py | ✅ Full |
-| **go** | go.mod | ✅ Full |
-| **rust** | Cargo.toml | ✅ Full |
-| **maven** | pom.xml | ✅ Full |
-| **gradle** | build.gradle | ✅ Full |
-| **nuget** | *.csproj, packages.config | ✅ Full |
-| **composer** | composer.json | ✅ Full |
 
 ## 🐛 Troubleshooting
 
@@ -484,27 +325,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Security Community**: For vulnerability data and research
 - **Open Source Contributors**: For making this project possible
 
-## 🔮 Roadmap
-
-### Upcoming Features
-- [ ] Real-time CI/CD pipeline integration
-- [ ] IDE vulnerability highlighting  
-- [ ] Custom vulnerability rules
-- [ ] SBOM generation and analysis
-- [ ] Compliance reporting (SOC2, ISO 27001)
-- [ ] Advanced threat modeling
-- [ ] Container image scanning
-- [ ] Infrastructure as Code scanning
-
-### Planned Integrations
-- [ ] VS Code extension
-- [ ] JetBrains plugin
-- [ ] GitHub Actions integration
-- [ ] Jenkins plugin
-- [ ] GitLab CI integration
-
 ---
 
 **Made with ❤️ by the PlawLabs Team**
 
-*Securing the future of AI-generated code, one package at a time.* 
+*Securing the future of AI-generated code.* 
