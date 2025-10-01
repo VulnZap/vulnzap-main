@@ -1,8 +1,8 @@
 # VulnZap 🔒
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue)](https://opensource.org/licenses/BUSL-1.1)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.2.2-blue)](https://www.typescriptlang.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue)](https://www.typescriptlang.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
 
 **The Missing Security Layer for AI-Generated Code**
@@ -26,8 +26,9 @@ VulnZap is a real-time vulnerability scanning tool that integrates seamlessly wi
 
 ### IDE Integrations
 - **Cursor IDE**: Full MCP integration + automatic extension installation
-- **VS Code**: Extension-only integration (no MCP required)
 - **Windsurf IDE**: Full MCP integration + automatic extension installation
+- **Cline**: MCP integration supported
+- **VS Code**: Extension-only integration (no MCP server)
 - **Generic MCP Support**: Compatible with any MCP-enabled environment
 
 ## 📦 Installation
@@ -43,7 +44,7 @@ npm install -g vulnzap
 
 ### From Source
 ```bash
-git clone https://github.com/vulnzap/vulnzap.git
+git clone https://github.com/VulnZap/vulnzap-main.git
 cd vulnzap
 npm install
 npm run build
@@ -70,7 +71,7 @@ This command will:
 # Setup API key only
 vulnzap setup -k <your-api-key>
 
-# Setup API key with specific IDE
+# Setup API key with specific IDE (cursor|windsurf|cline|vscode)
 vulnzap setup -k <your-api-key> --ide cursor
 ```
 
@@ -117,27 +118,27 @@ vulnzap check express --ecosystem npm --version 4.17.1
 # Batch scan current directory
 vulnzap batch-scan [--ecosystem <ecosystem>] [--output <file>]
 
-# Options
---cache, -C     Use cached results
---ai, -A        Use AI for vulnerability summaries
+# Repository scan (GitHub)
+vulnzap scan <https://github.com/owner/repo> [--branch <branch>] [--wait] [--output <file>] [--key <api-key>]
 ```
 
 ### IDE Integration
 ```bash
-# Connect to specific IDE (alternative to init/setup)
-vulnzap connect [--ide cursor|vscode|windsurf]
+# Connect to a specific IDE (alternative to init/setup)
+vulnzap connect [--ide cursor|windsurf|cline|vscode]
 
-# Start MCP server manually (for debugging)
-vulnzap secure [--ide <ide>] [--port <port>]
+# Start MCP server manually (for IDEs that use MCP)
+vulnzap mcp
 ```
 
 #### Supported IDEs
 - **Cursor IDE**: Full MCP integration + extension
-- **VS Code**: Extension only (no MCP)
 - **Windsurf IDE**: Full MCP integration + extension
+- **Cline**: MCP integration supported
+- **VS Code**: Extension only (no MCP server)
 
 #### Automatic IDE Detection
-The `init` command automatically detects which of the supported IDEs are installed on your system and allows you to select multiple IDEs for integration.
+The `init` command automatically detects which of the supported IDEs are installed on your system (VS Code, Cursor, Windsurf) and allows you to select multiple IDEs for integration.
 
 ## 📂 Project Structure
 
@@ -145,9 +146,10 @@ The `init` command automatically detects which of the supported IDEs are install
 vulnzap/
 ├── src/
 │   ├── api/                 # API integration layer
-│   │   ├── auth.ts         # Authentication & OAuth
-│   │   ├── batchScan.ts    # Batch scanning functionality
-│   │   └── apis.ts         # API utilities
+│   │   ├── auth.ts          # Authentication & OAuth
+│   │   ├── batchScan.ts     # Batch scanning functionality
+│   │   ├── repoScan.ts      # Repository scanning (jobs & SSE)
+│   │   └── apis.ts          # API utilities
 │   ├── config/             # Configuration management
 │   │   └── config.ts       # App configuration
 │   ├── services/           # Core services
@@ -158,8 +160,10 @@ vulnzap/
 │   │   ├── packageExtractor.ts  # Package file parsing
 │   │   ├── apiClient.ts    # HTTP client wrapper
 │   │   └── checks.ts       # Project validation
+│   ├── mcp/                # MCP server implementation
+│   │   └── server.ts       # MCP server entry
 │   ├── cli.ts              # Command-line interface
-│   └── index.ts            # MCP server implementation
+│   └── tui.ts              # Terminal UI (internal)
 ├── tests/                  # Test suite
 ├── dist/                   # Compiled JavaScript
 ├── package.json            # Project dependencies
@@ -197,8 +201,8 @@ vulnzap/
 {
   "mcpServers": {
     "VulnZap": {
-      "command": "vulnzap",
-      "args": ["secure", "--ide", "cursor"],
+      "command": "npx",
+      "args": ["vulnzap", "mcp"],
       "env": {
         "VULNZAP_API_KEY": "your_api_key"
       }
@@ -212,8 +216,8 @@ vulnzap/
 {
   "mcpServers": {
     "VulnZap": {
-      "command": "vulnzap",
-      "args": ["secure", "--ide", "windsurf"],
+      "command": "npx",
+      "args": ["vulnzap", "mcp"],
       "env": {
         "VULNZAP_API_KEY": "your_api_key"
       }
@@ -221,6 +225,9 @@ vulnzap/
   }
 }
 ```
+
+#### Cline (Windows example)
+The `vulnzap connect --ide cline` command will write the MCP config automatically. If you need to do it manually, set the MCP server to run `npx vulnzap mcp` and provide `VULNZAP_API_KEY` in the environment.
 
 ## 🧪 Testing
 
@@ -301,7 +308,7 @@ Make sure your project contains supported package files:
 ### Debug Mode
 ```bash
 # Enable verbose logging
-VULNZAP_DEBUG=true vulnzap secure --ide cursor
+VULNZAP_DEBUG=true vulnzap mcp
 
 # Check MCP server logs
 tail -f ~/.vulnzap/logs/mcp-server.log
@@ -316,7 +323,7 @@ tail -f ~/.vulnzap/logs/mcp-server.log
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Business Source License 1.1 (BUSL-1.1) - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
