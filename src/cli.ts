@@ -1178,9 +1178,6 @@ program
                   if (event.data.jobStatus) {
                     console.log(typography.muted(`     Status: ${event.data.jobStatus}`));
                   }
-                  if (event.data.progress !== undefined) {
-                    console.log(typography.muted(`     Progress: ${event.data.progress}%`));
-                  }
                   spacing.line();
                   break;
 
