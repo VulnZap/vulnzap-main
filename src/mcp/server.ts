@@ -26,7 +26,7 @@ import {
     getDiffFiles,
     isGitRepository
 } from "../utils/gitUtils.js";
-import { VulnzapClient } from "../../../vulnzap-lib/dist/index.js";
+import { VulnzapClient } from "@vulnzap/client";
 
 // Load environment variables
 dotenv.config();
