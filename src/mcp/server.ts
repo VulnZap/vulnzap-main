@@ -11,28 +11,123 @@ import {
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
 import dotenv from "dotenv";
-
-import { batchScan } from "../api/batchScan.js";
-import { cacheService } from "../services/cache.js";
-import { saveKey, getKey } from "../api/auth.js";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { createRequire } from "module";
+
+import { saveKey, getKey } from "../api/auth.js";
+import { scanState } from "./scanState.js";
+import {
+    getCurrentCommitHash,
+    getRepositoryUrl,
+    getCurrentBranch,
+    getUserIdentifier,
+    getDiffFiles,
+    isGitRepository
+} from "../utils/gitUtils.js";
 
 // Load environment variables
 dotenv.config();
-
-export interface ApiResponse {
-    message: string;
-    status: number;
-    data: any;
-}
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
 const version = packageJson.version;
+
+// Use createRequire to import @vulnzap/client (it only has require exports)
+const require = createRequire(import.meta.url);
+const { VulnzapClient } = require("@vulnzap/client");
+
+// Global VulnzapClient instance
+let vulnzapClient: any = null;
+
+/**
+ * Initialize VulnzapClient with API key
+ */
+async function initializeClient(): Promise<any> {
+    if (vulnzapClient) {
+        return vulnzapClient;
+    }
+
+    const apiKey = await getKey();
+    vulnzapClient = new VulnzapClient({ apiKey });
+
+    // Set up event listeners
+    vulnzapClient.on("update", (evt: any) => {
+        // Update scan state if needed
+        // The client handles its own state, but we can track progress here
+    });
+
+    vulnzapClient.on("completed", (evt: any) => {
+        // Store completed scan results in scanState
+        // Find scan by jobId and mark as completed
+        const scans = scanState.getAllScans();
+        const scan = scans.find(s => s.jobId === evt.jobId);
+        if (scan) {
+            scanState.updateScan(scan.scan_id, {
+                ...scan,
+                timestamp: Date.now()
+            });
+        }
+    });
+
+    vulnzapClient.on("error", (err: any) => {
+        console.error("VulnzapClient error:", err);
+    });
+
+    return vulnzapClient;
+}
+
+/**
+ * Generate a scan_id from jobId or create a new one
+ */
+function generateScanId(jobId: string, type: 'diff' | 'full'): string {
+    const prefix = type === 'diff' ? 'vz_' : 'vz_full_';
+    // Use first 6 chars of jobId or generate short random string
+    const shortId = jobId.substring(0, 6) || Math.random().toString(36).substring(2, 8);
+    return `${prefix}${shortId}`;
+}
+
+/**
+ * Transform client findings to spec format
+ */
+function transformFindings(findings: any[]): Array<{
+    id: string;
+    severity: string;
+    path: string;
+    range: {
+        start: { line: number; col: number };
+    };
+}> {
+    return findings.map((finding: any, index: number) => ({
+        id: `VZ-${index + 1}`,
+        severity: finding.severity || 'medium',
+        path: finding.file || '',
+        range: {
+            start: {
+                line: finding.line || 1,
+                col: finding.column || 1
+            }
+        }
+    }));
+}
+
+/**
+ * Calculate severity counts
+ */
+function calculateCounts(findings: any[]): { high: number; medium: number; low: number; critical?: number } {
+    const counts = { high: 0, medium: 0, low: 0, critical: 0 };
+    findings.forEach((f: any) => {
+        const severity = (f.severity || 'medium').toLowerCase();
+        if (severity === 'critical') counts.critical = (counts.critical || 0) + 1;
+        else if (severity === 'high') counts.high++;
+        else if (severity === 'medium') counts.medium++;
+        else counts.low++;
+    });
+    return counts;
+}
 
 /**
  * Start the VulnZap MCP server
@@ -58,6 +153,9 @@ export async function startMcpServer(): Promise<void> {
         process.exit(1);
     }
 
+    // Initialize VulnzapClient
+    await initializeClient();
+
     // Initialize the MCP server
     const server = new McpServer(
         {
@@ -71,8 +169,8 @@ export async function startMcpServer(): Promise<void> {
         }
     );
 
-    // Define resources and tools
-    setupVulnerabilityResource(server);
+    // Define tools
+    setupVulnzapTools(server);
 
     // Set up the transport
     const transport = new StdioServerTransport();
@@ -82,204 +180,478 @@ export async function startMcpServer(): Promise<void> {
 }
 
 /**
- * Set up the vulnerability resource for the MCP server
+ * Set up the Vulnzap MCP tools
  *
  * @param server - The MCP server instance
  */
-function setupVulnerabilityResource(server: McpServer): void {
-    // Batch vulnerability scanning
+function setupVulnzapTools(server: McpServer): void {
+    // Tool 1: vulnzap.scan_diff
     server.tool(
-        "package-vulnerability-scan",
-        "Scan package(s) for known security vulnerabilities.\n\n" +
-        "Call this tool whenever you need to:\n" +
-        "- Check the security status of all packages in a codebase (before deployment, during onboarding, or after major changes)\n" +
-        "- Audit a project for vulnerable dependencies across package.json, requirements.txt, etc.\n\n" +
-        "Use this tool to ensure the entire project is free from known dependency vulnerabilities before release or as part of regular security hygiene.",
+        "vulnzap.scan_diff",
+        "Fast, incremental, non-blocking scan on the current diff. Fire-and-forget: call this and continue coding, then poll results via vulnzap.status.",
         {
-            packages: z.array(z.object({
-                packageName: z.string(),
-                ecosystem: z.string(),
-                version: z.string(),
-            })),
+            repo: z.string().optional().default(".").describe("Path to the repo, usually '.'"),
+            since: z.string().optional().default("HEAD").describe("Commit or ref to diff against, usually 'HEAD'"),
+            paths: z.array(z.string()).optional().describe("Optional array of glob patterns to limit scope")
         },
-        async ({ packages }) => {            
+        async ({ repo, since, paths }) => {
             try {
-                if (packages.length === 0) {
+                // Ensure client is initialized
+                const client = await initializeClient();
+
+                // Check if it's a git repository
+                if (!isGitRepository(repo)) {
                     return {
                         content: [
                             {
                                 type: "text",
-                                text: "No packages found to scan",
-                            },
-                        ],
+                                text: JSON.stringify({
+                                    error: "Not a git repository",
+                                    message: `The path "${repo}" is not a git repository. Please run this tool from within a git repository.`
+                                }, null, 2)
+                            }
+                        ]
                     };
                 }
 
-                // Perform batch scan
-                const results = await batchScan(packages, {
-                    useCache: true,
-                    useAi: true
+                // Auto-detect commit hash
+                const commitHash = getCurrentCommitHash(repo) || since;
+                if (!commitHash) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Could not determine commit hash",
+                                    message: "Unable to get commit hash. Ensure you're in a git repository with commits."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Get diff files
+                const files = getDiffFiles(since, repo, paths);
+                if (files.length === 0) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    scan_id: null,
+                                    queued: false,
+                                    message: "No files changed in diff",
+                                    summary: {
+                                        files_considered: 0,
+                                        mode: "diff"
+                                    }
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Get repository URL and user identifier
+                const repository = getRepositoryUrl(repo) || undefined;
+                const userIdentifier = getUserIdentifier(repo) || 'unknown';
+
+                // Start commit scan
+                const response = await client.scanCommit({
+                    commitHash,
+                    repository,
+                    branch: getCurrentBranch(repo) || undefined,
+                    files: files.map(f => ({
+                        name: f.name,
+                        content: f.content
+                    })),
+                    userIdentifier
                 });
 
-                // Extract results array (same as CLI)
-                const scanResults = results.results || [];
-
-                const vulnerableCount = scanResults.filter(r => r.status === 'vulnerable').length;
-                const safeCount = scanResults.filter(r => r.status === 'safe').length;
-                const errorCount = scanResults.filter(r => r.status === 'error').length;
-
-                let report = `# Batch Vulnerability Scan Results\n\n`;
-                report += `Scanned ${packages.length} packages\n\n`;
-                report += `## Summary\n\n`;
-                report += `- 🚨 Vulnerable packages: ${vulnerableCount}\n`;
-                report += `- ✅ Safe packages: ${safeCount}\n`;
-                report += `- ❌ Errors: ${errorCount}\n\n`;
-
-                // Display detailed results (same as CLI)
-                if (vulnerableCount > 0) {
-                    report += `## Vulnerable Packages\n\n`;
-                    scanResults
-                        .filter(r => r.status === 'vulnerable')
-                        .forEach(result => {
-                            report += `### ${result.package.packageName}@${result.package.version} (${result.package.ecosystem})\n\n`;
-                            report += `${result.message}\n\n`;
-
-                            if (result.vulnerabilities) {
-                                result.vulnerabilities.forEach(vuln => {
-                                    report += `- ${vuln.title} (${vuln.severity})\n`;
-                                    report += `  ${vuln.description}\n`;
-                                    if (vuln.references?.length) {
-                                        report += `  References: ${vuln.references.join(', ')}\n`;
-                                    }
-                                    report += '\n';
-                                });
-                            }
-
-                            if (result.remediation) {
-                                report += `#### Remediation\n\n`;
-                                report += `- Update to ${result.remediation.recommendedVersion}\n`;
-                                report += `- ${result.remediation.notes}\n`;
-                                if (result.remediation.alternativePackages?.length) {
-                                    report += '- Alternative packages:\n';
-                                    result.remediation.alternativePackages.forEach(pkg => {
-                                        report += `  - ${pkg}\n`;
-                                    });
-                                }
-                                report += '\n';
-                            }
-                        });
-                }
+                // Generate scan_id and register scan
+                const jobId = response.data.jobId;
+                const scan_id = generateScanId(jobId, 'diff');
+                scanState.registerScan({
+                    scan_id,
+                    jobId,
+                    type: 'diff',
+                    timestamp: Date.now(),
+                    repo: repository || repo,
+                    commitHash
+                });
 
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Here are the results of the batch scan, summarise it to the user and propose your actions:\n\n${report}`,
-                        },
-                    ],
+                            text: JSON.stringify({
+                                scan_id,
+                                queued: true,
+                                eta_ms: 8000, // Rough estimate for diff scans
+                                next_hint: "call vulnzap.status with scan_id",
+                                summary: {
+                                    files_considered: files.length,
+                                    mode: "diff"
+                                }
+                            }, null, 2)
+                        }
+                    ]
                 };
             } catch (error: any) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: `Error performing batch scan: ${error.message}`,
-                        },
-                    ],
+                            text: JSON.stringify({
+                                error: error.message || "Unknown error",
+                                message: `Failed to start diff scan: ${error.message}`
+                            }, null, 2)
+                        }
+                    ]
                 };
             }
         }
     );
-    server.tool(
-        'repo_scan_start',
-        'Start a vulnerability scan for a GitHub repository. The CLI will use real-time Server-Sent Events for live progress updates, with fallback to polling if needed. If repoUrl is unknown, first obtain it from package.json (repository.url) or README, or ask the user. Scans typically take 5+ minutes and consume tokens from the user\'s plan. Only initiate after all changes are finalized, committed, and pushed to the repo. Strongly confirm with the user before starting — pushing to production before a clean scan is risky. The scan runs in the cloud and continues even if the terminal is closed; you can monitor progress/logs in the dashboard and via repo_scan_progress. After completion, call repo_scan_progress (or peek_events if unsure), review any reported vulnerabilities, propose and apply fixes, re-scan if needed, and only deploy when the report is clean.',
-        {
-          repoUrl: z.string().optional().describe('Repository URL (e.g., https://github.com/owner/repo) without the .git extension'),
-          branch: z.string().optional().default('main').describe('Branch to scan (defaults to main)')
-        },
-        async ({ repoUrl, branch }) => {
-          try {
-            // If repoUrl not provided or invalid, instruct the AGENT to obtain it first
-            if (!repoUrl || !/github\.com\/[^/]+\/[^/]+$/.test(repoUrl)) {
-              return {
-                content: [
-                  {
-                    type: 'text',
-                    text: [
-                      'Repository URL not provided or invalid.',
-                      '',
-                      'Obtain the GitHub repository URL first:',
-                      '1) Inspect package.json: repository.url',
-                      '2) If absent, check README for a GitHub link',
-                      '3) If still unknown, ask the user to provide https://github.com/owner/repo',
-                      '',
-                      'Before starting a scan:',
-                      '- Ensure ALL changes are committed and pushed to the repository',
-                      '- Confirm with the user to proceed (scans take 5+ minutes and consume tokens)',
-                      '- It\'s risky to deploy to production before a clean scan',
-                      '',
-                      'Once you have the URL, run this command in the terminal and wait for completion:',
-                      '',
-                      'npx --yes vulnzap scan "<GITHUB_REPO_URL>" --output scan-results.json --wait',
-                      '',
-                      'Do not call any HTTP APIs for this action; use the terminal only.',
-                      '',
-                      'Notes:',
-                      '- The --output flag saves results to scan-results.json for easy reading',
-                      '- The --wait flag will wait for completion and show final results',
-                      '- After completion, read the scan-results.json file to check the final status',
-                      '- The scan runs in the cloud and continues if you close the terminal',
-                      '- Track progress/logs in the dashboard or by calling repo_scan_progress',
-                      '- After completion, call repo_scan_progress (or peek_events), review vulnerabilities, propose patches, and fix them',
-                      '- Re-scan if needed and deploy only when the report is clean'
-                    ].join('\n')
-                  }
-                ]
-              };
-            }
-    
-            // Instruct the AGENT to execute the CLI scan and wait
-            const command = branch !== 'main'
-              ? `npx --yes vulnzap scan "${repoUrl}" --branch ${branch} --output scan-results.json --wait`
-              : `npx --yes vulnzap scan "${repoUrl}" --output scan-results.json --wait`;
 
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: [
-                    'Run the following command in the terminal and wait until it completes:',
-                    '',
-                    command,
-                    '',
-                    'Notes:',
-                    `- Use the default branch unless you need a specific one (requested: ${branch}).`,
-                    '- The --output flag saves results to scan-results.json for easy reading.',
-                    '- The --wait flag will wait for completion and show final results.',
-                    '- After completion, read the scan-results.json file to check the final status.',
-                    '- Do not call any HTTP APIs to start the scan; use the terminal only.',
-                    '- Scans typically take 5+ minutes and consume tokens from the user\'s plan.',
-                    '- Ensure all changes are committed and pushed before starting.',
-                    '- It\'s risky to deploy to production before a clean scan.',
-                    '- The scan runs in the cloud and continues if you close the terminal.',
-                    '- Monitor progress/logs in the dashboard or via repo_scan_progress.',
-                    '- After completion, call repo_scan_progress (or peek_events), review vulnerabilities, propose patches, and fix them.',
-                    '- Re-scan if needed and deploy only when the report is clean.'
-                  ].join('\n')
+    // Tool 2: vulnzap.status
+    server.tool(
+        "vulnzap.status",
+        "Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.",
+        {
+            scan_id: z.string().optional().describe("Explicit scan_id to check"),
+            latest: z.boolean().optional().describe("Get status of latest scan for this repo")
+        },
+        async ({ scan_id, latest }) => {
+            try {
+                const client = await initializeClient();
+
+                let targetScanId: string | undefined;
+                let scanMetadata;
+
+                if (latest) {
+                    // Get latest scan for current repo
+                    const repo = getRepositoryUrl() || ".";
+                    scanMetadata = scanState.getLatestScan(repo);
+                    if (!scanMetadata) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        message: "No scan found for this repository. Run vulnzap.scan_diff or vulnzap.full_scan first."
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                    targetScanId = scanMetadata.scan_id;
+                } else if (scan_id) {
+                    scanMetadata = scanState.getScan(scan_id);
+                    if (!scanMetadata) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        message: `Scan ${scan_id} not found. It may have expired or never existed.`
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                    targetScanId = scan_id;
+                } else {
+                    // Default to latest
+                    const repo = getRepositoryUrl() || ".";
+                    scanMetadata = scanState.getLatestScan(repo);
+                    if (!scanMetadata) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        message: "No scan found. Provide scan_id or use latest: true"
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                    targetScanId = scanMetadata.scan_id;
                 }
-              ]
-            };
-          } catch (error) {
-            console.error('Error in repo_scan_start tool:', error);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: `Error initiating scan: ${error instanceof Error ? error.message : 'Unknown error'}`
+
+                if (!scanMetadata || !targetScanId) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    ready: false,
+                                    message: "Could not determine scan to check"
+                                }, null, 2)
+                            }
+                        ]
+                    };
                 }
-              ]
-            };
-          }
+
+                // Try to get completed scan results from client cache/API
+                try {
+                    const results = await client.getCompletedCommitScan(scanMetadata.jobId);
+                    
+                    // Check if scan is completed and has results
+                    if (results.status === 'completed' && results.results) {
+                        // Extract findings from results (structure may vary)
+                        const findings = results.results.findings || results.results || [];
+                        const open_issues = transformFindings(findings);
+                        const counts = calculateCounts(findings);
+
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: true,
+                                        open_issues,
+                                        counts,
+                                        next_hint: "fix issues, then call scan_diff again before next commit"
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    } else {
+                        // Still running
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        poll_after_ms: 5000
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                } catch (error: any) {
+                    // Scan might still be running or not found
+                    // Check if it's a 404 (not found/not ready) vs other error
+                    if (error.message?.includes('404') || error.message?.includes('not found')) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        poll_after_ms: 5000
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                    throw error;
+                }
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                ready: false,
+                                error: error.message || "Unknown error",
+                                message: `Failed to get scan status: ${error.message}`
+                            }, null, 2)
+                        }
+                    ]
+                };
+            }
         }
-      );
+    );
+
+    // Tool 3: vulnzap.full_scan
+    server.tool(
+        "vulnzap.full_scan",
+        "Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.",
+        {
+            repo: z.string().optional().default(".").describe("Repository path"),
+            mode: z.string().optional().default("baseline").describe("Scan mode, should be 'baseline'")
+        },
+        async ({ repo, mode }) => {
+            try {
+                const client = await initializeClient();
+
+                // Check if it's a git repository
+                if (!isGitRepository(repo)) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Not a git repository",
+                                    message: `The path "${repo}" is not a git repository.`
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Get repository URL
+                const repository = getRepositoryUrl(repo);
+                if (!repository) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Could not determine repository URL",
+                                    message: "Unable to get repository URL from git remote. Ensure origin remote is configured."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                const branch = getCurrentBranch(repo) || 'main';
+                const userIdentifier = getUserIdentifier(repo) || 'unknown';
+
+                // Start repository scan
+                const response = await client.scanRepository({
+                    repository,
+                    branch,
+                    userIdentifier
+                });
+
+                // Generate scan_id and register scan
+                const jobId = response.data.jobId;
+                const scan_id = generateScanId(jobId, 'full');
+                scanState.registerScan({
+                    scan_id,
+                    jobId,
+                    type: 'full',
+                    timestamp: Date.now(),
+                    repo: repository
+                });
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                scan_id,
+                                queued: true,
+                                eta_ms: 180000 // 3 minutes estimate for full scans
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                error: error.message || "Unknown error",
+                                message: `Failed to start full scan: ${error.message}`
+                            }, null, 2)
+                        }
+                    ]
+                };
+            }
+        }
+    );
+
+    // Tool 4: vulnzap.report
+    server.tool(
+        "vulnzap.report",
+        "Human readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.",
+        {
+            scan_id: z.string().describe("Scan ID to generate report for"),
+            format: z.string().optional().default("md").describe("Report format, currently only 'md' supported")
+        },
+        async ({ scan_id, format }) => {
+            try {
+                const client = await initializeClient();
+
+                const scanMetadata = scanState.getScan(scan_id);
+                if (!scanMetadata) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Scan not found",
+                                    message: `Scan ${scan_id} not found`
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Get scan results
+                const results = await client.getCompletedCommitScan(scanMetadata.jobId);
+
+                if (results.status !== 'completed' || !results.results) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Scan not completed",
+                                    message: `Scan ${scan_id} is not yet completed. Use vulnzap.status to check progress.`
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Extract findings from results (structure may vary)
+                const findings = results.results.findings || results.results || [];
+
+                // Generate markdown report
+                let markdown = "## Vulnzap Findings\n\n";
+                
+                if (findings.length === 0) {
+                    markdown += "✅ No vulnerabilities found.\n";
+                } else {
+                    const counts = calculateCounts(findings);
+                    markdown += `### Summary\n\n`;
+                    markdown += `- Total findings: ${findings.length}\n`;
+                    if (counts.critical) markdown += `- Critical: ${counts.critical}\n`;
+                    markdown += `- High: ${counts.high}\n`;
+                    markdown += `- Medium: ${counts.medium}\n`;
+                    markdown += `- Low: ${counts.low}\n\n`;
+
+                    markdown += `### Details\n\n`;
+                    findings.forEach((finding: any, index: number) => {
+                        const severity = (finding.severity || 'medium').toUpperCase();
+                        markdown += `#### [${severity}] ${finding.file || 'unknown'}:L${finding.line || '?'}\n\n`;
+                        markdown += `${finding.message || 'No description'}\n\n`;
+                    });
+                }
+
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                markdown
+                            }, null, 2)
+                        }
+                    ]
+                };
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                error: error.message || "Unknown error",
+                                message: `Failed to generate report: ${error.message}`
+                            }, null, 2)
+                        }
+                    ]
+                };
+            }
+        }
+    );
 }

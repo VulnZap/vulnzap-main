@@ -140,6 +140,138 @@ vulnzap mcp
 #### Automatic IDE Detection
 The `init` command automatically detects which of the supported IDEs are installed on your system (VS Code, Cursor, Windsurf) and allows you to select multiple IDEs for integration.
 
+## MCP Tools (For AI Agents)
+
+VulnZap provides 4 MCP tools for AI agents to perform vulnerability scanning during development:
+
+### 1. `vulnzap.scan_diff`
+Fast, incremental, non-blocking scan on the current git diff. Fire-and-forget: call this and continue coding, then poll results via `vulnzap.status`.
+
+**Input:**
+```json
+{
+  "repo": ".",           // Path to repo (default: ".")
+  "since": "HEAD",       // Commit/ref to diff against (default: "HEAD")
+  "paths": ["optional/globs/**"]  // Optional: limit scope with glob patterns
+}
+```
+
+**Response:**
+```json
+{
+  "scan_id": "vz_91f...",
+  "queued": true,
+  "eta_ms": 8000,
+  "next_hint": "call vulnzap.status with scan_id",
+  "summary": {
+    "files_considered": 7,
+    "mode": "diff"
+  }
+}
+```
+
+**Usage:** Call at natural checkpoints (pre-commit or after sizable changes). The agent continues coding while the scan runs in the background.
+
+### 2. `vulnzap.status`
+Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.
+
+**Input:**
+```json
+{ "scan_id": "vz_91f..." }  // Explicit scan_id
+// or
+{ "latest": true }           // Get latest scan for this repo
+```
+
+**Response (ready):**
+```json
+{
+  "ready": true,
+  "open_issues": [
+    {
+      "id": "VZ-123",
+      "severity": "high",
+      "path": "api/login.ts",
+      "range": {
+        "start": { "line": 41, "col": 7 }
+      }
+    }
+  ],
+  "counts": {
+    "high": 1,
+    "medium": 1,
+    "low": 0
+  },
+  "next_hint": "fix issues, then call scan_diff again before next commit"
+}
+```
+
+**Response (still running):**
+```json
+{
+  "ready": false,
+  "poll_after_ms": 5000
+}
+```
+
+**Usage:** Poll this tool to check scan progress. If `ready: false`, wait and poll again with backoff (5-30 seconds).
+
+### 3. `vulnzap.full_scan`
+Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.
+
+**Input:**
+```json
+{
+  "repo": ".",           // Repository path (default: ".")
+  "mode": "baseline"     // Scan mode (default: "baseline")
+}
+```
+
+**Response:**
+```json
+{
+  "scan_id": "vz_full_7c2",
+  "queued": true,
+  "eta_ms": 180000
+}
+```
+
+**Usage:** Call once before serious push or deploy. Continue coding while it runs, then poll `vulnzap.status` until complete.
+
+### 4. `vulnzap.report`
+Human-readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.
+
+**Input:**
+```json
+{
+  "scan_id": "vz_91f...",
+  "format": "md"  // Report format (default: "md")
+}
+```
+
+**Response:**
+```json
+{
+  "markdown": "## Vulnzap Findings\n- [HIGH] api/login.ts:L41 ..."
+}
+```
+
+**Usage:** After any fix cycle, call this to generate a markdown summary for PR descriptions, agent logs, or comment threads.
+
+### Recommended Agent Workflow
+
+1. **Startup Check**: Call `vulnzap.status` with `{"latest": true}` to check for existing issues
+2. **While Coding**: At checkpoints, call `vulnzap.scan_diff` and continue coding
+3. **Poll Status**: Periodically call `vulnzap.status` with the scan_id
+4. **Fix Issues**: If issues found, fix them and call `vulnzap.scan_diff` again
+5. **Before Push**: Call `vulnzap.full_scan` once, poll until complete
+6. **Generate Report**: Optionally call `vulnzap.report` to attach to PRs
+
+**Key Behaviors:**
+- `vulnzap.scan_diff`: Fast, non-blocking, stackable. Use frequently on diffs.
+- `vulnzap.status`: The only way the agent learns about problems. Poll it.
+- `vulnzap.full_scan`: Reserved for pre-push or pre-deploy workflows (slower).
+- `vulnzap.report`: For humans. Every other tool returns JSON for the agent.
+
 ## 📂 Project Structure
 
 ```
@@ -159,9 +291,11 @@ vulnzap/
 │   ├── utils/              # Utility functions
 │   │   ├── packageExtractor.ts  # Package file parsing
 │   │   ├── apiClient.ts    # HTTP client wrapper
-│   │   └── checks.ts       # Project validation
+│   │   ├── checks.ts       # Project validation
+│   │   └── gitUtils.ts     # Git operations (commit hash, diff, repo URL)
 │   ├── mcp/                # MCP server implementation
-│   │   └── server.ts       # MCP server entry
+│   │   ├── server.ts       # MCP server entry & tool definitions
+│   │   └── scanState.ts    # In-memory scan state management
 │   ├── cli.ts              # Command-line interface
 │   └── tui.ts              # Terminal UI (internal)
 ├── tests/                  # Test suite
@@ -334,6 +468,6 @@ This project is licensed under the Business Source License 1.1 (BUSL-1.1) - see 
 
 ---
 
-**Made with ❤️ by the PlawLabs Team**
+**Made with ❤️ by the Plaw Inc Team**
 
 *Securing the future of AI-generated code.* 

@@ -19,7 +19,7 @@ import { execSync } from 'child_process';
 import { cacheService } from './services/cache.js';
 import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
 import { getMockProfile } from './utils/mockUser.js';
-import { startMcpServer } from './mcp/server.js';
+// Lazy import for MCP server - only loaded when 'mcp' command is executed
 import { startRepoScan, getRepoScanStatus, getScanResults, streamScanEvents, ScanEvent } from './api/repoScan.js';
 
 // Get package version
@@ -1097,6 +1097,8 @@ program
   .description('Start the VulnZap MCP server for IDE integration')
   .action(async () => {
     try {
+      // Lazy import MCP server to avoid loading @vulnzap/client when not needed
+      const { startMcpServer } = await import('./mcp/server.js');
       // Start the MCP server
       await startMcpServer();
     } catch (error: any) {
