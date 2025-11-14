@@ -26,6 +26,7 @@ import {
     getDiffFiles,
     isGitRepository
 } from "../utils/gitUtils.js";
+import { VulnzapClient } from "../../../vulnzap-lib/dist/index.js";
 
 // Load environment variables
 dotenv.config();
@@ -38,56 +39,16 @@ const version = packageJson.version;
 
 // Use createRequire to import @vulnzap/client (it only has require exports)
 const require = createRequire(import.meta.url);
-const { VulnzapClient } = require("@vulnzap/client");
 
 // Global VulnzapClient instance
-let vulnzapClient: any = null;
+let vulnzapClient: VulnzapClient | null = null;
 
-/**
- * Initialize VulnzapClient with API key
- */
-async function initializeClient(): Promise<any> {
-    if (vulnzapClient) {
-        return vulnzapClient;
-    }
-
+async function initializeClient(): Promise<VulnzapClient> {
+    if (vulnzapClient) return vulnzapClient;
     const apiKey = await getKey();
     vulnzapClient = new VulnzapClient({ apiKey });
 
-    // Set up event listeners
-    vulnzapClient.on("update", (evt: any) => {
-        // Update scan state if needed
-        // The client handles its own state, but we can track progress here
-    });
-
-    vulnzapClient.on("completed", (evt: any) => {
-        // Store completed scan results in scanState
-        // Find scan by jobId and mark as completed
-        const scans = scanState.getAllScans();
-        const scan = scans.find(s => s.jobId === evt.jobId);
-        if (scan) {
-            scanState.updateScan(scan.scan_id, {
-                ...scan,
-                timestamp: Date.now()
-            });
-        }
-    });
-
-    vulnzapClient.on("error", (err: any) => {
-        console.error("VulnzapClient error:", err);
-    });
-
     return vulnzapClient;
-}
-
-/**
- * Generate a scan_id from jobId or create a new one
- */
-function generateScanId(jobId: string, type: 'diff' | 'full'): string {
-    const prefix = type === 'diff' ? 'vz_' : 'vz_full_';
-    // Use first 6 chars of jobId or generate short random string
-    const shortId = jobId.substring(0, 6) || Math.random().toString(36).substring(2, 8);
-    return `${prefix}${shortId}`;
 }
 
 /**
@@ -154,7 +115,12 @@ export async function startMcpServer(): Promise<void> {
     }
 
     // Initialize VulnzapClient
-    await initializeClient();
+    vulnzapClient = await initializeClient();
+
+    if (!vulnzapClient) {
+        console.error('Failed to initialize VulnzapClient');
+        process.exit(1);
+    }
 
     // Initialize the MCP server
     const server = new McpServer(
@@ -186,18 +152,23 @@ export async function startMcpServer(): Promise<void> {
  */
 function setupVulnzapTools(server: McpServer): void {
     // Tool 1: vulnzap.scan_diff
-    server.tool(
-        "vulnzap.scan_diff",
-        "Fast, incremental, non-blocking scan on the current diff. Fire-and-forget: call this and continue coding, then poll results via vulnzap.status.",
+    server.registerTool(
+        'vulnzap.scan_diff',
         {
-            repo: z.string().optional().default(".").describe("Path to the repo, usually '.'"),
-            since: z.string().optional().default("HEAD").describe("Commit or ref to diff against, usually 'HEAD'"),
-            paths: z.array(z.string()).optional().describe("Optional array of glob patterns to limit scope")
+            title: "Scan the current diff",
+            description: "Fast, incremental, non-blocking scan on the current diff. Fire-and-forget: call this and continue coding, then poll results via vulnzap.status.",
+            inputSchema: z.object({
+                repo: z.string().describe("Path to the repo"),
+                since: z.string().optional().default("HEAD").describe("Commit or ref to diff against, usually 'HEAD'"),
+                paths: z.array(z.string()).optional().describe("Optional array of glob patterns to limit scope")
+            })
         },
-        async ({ repo, since, paths }) => {
+        async ({ repo, since = 'HEAD', paths = [] }) => {
             try {
-                // Ensure client is initialized
-                const client = await initializeClient();
+                if (!vulnzapClient) {
+                    console.error('Failed to initialize VulnzapClient');
+                    process.exit(1);
+                }
 
                 // Check if it's a git repository
                 if (!isGitRepository(repo)) {
@@ -231,7 +202,7 @@ function setupVulnzapTools(server: McpServer): void {
                 }
 
                 // Get diff files
-                const files = getDiffFiles(since, repo, paths);
+                const files = getDiffFiles(since || '', repo || '', paths || []);
                 if (files.length === 0) {
                     return {
                         content: [
@@ -252,11 +223,25 @@ function setupVulnzapTools(server: McpServer): void {
                 }
 
                 // Get repository URL and user identifier
-                const repository = getRepositoryUrl(repo) || undefined;
+                const repository = getRepositoryUrl(repo);
+                if (!repository) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Could not determine repository URL",
+                                    message: "Unable to get repository URL from git remote. Ensure origin remote is configured."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
                 const userIdentifier = getUserIdentifier(repo) || 'unknown';
 
                 // Start commit scan
-                const response = await client.scanCommit({
+                const response = await vulnzapClient.scanCommit({
                     commitHash,
                     repository,
                     branch: getCurrentBranch(repo) || undefined,
@@ -269,7 +254,7 @@ function setupVulnzapTools(server: McpServer): void {
 
                 // Generate scan_id and register scan
                 const jobId = response.data.jobId;
-                const scan_id = generateScanId(jobId, 'diff');
+                const scan_id = jobId;
                 scanState.registerScan({
                     scan_id,
                     jobId,
@@ -287,7 +272,7 @@ function setupVulnzapTools(server: McpServer): void {
                                 scan_id,
                                 queued: true,
                                 eta_ms: 8000, // Rough estimate for diff scans
-                                next_hint: "call vulnzap.status with scan_id",
+                                next_hint: "call vulnzap.status with scan_id before your next commit",
                                 summary: {
                                     files_considered: files.length,
                                     mode: "diff"
@@ -313,24 +298,44 @@ function setupVulnzapTools(server: McpServer): void {
     );
 
     // Tool 2: vulnzap.status
-    server.tool(
-        "vulnzap.status",
-        "Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.",
+    server.registerTool(
+        'vulnzap.status',
         {
-            scan_id: z.string().optional().describe("Explicit scan_id to check"),
-            latest: z.boolean().optional().describe("Get status of latest scan for this repo")
+            title: "Get the latest results for a scan or for the latest scan",
+            description: "Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.",
+            inputSchema: z.object({
+                repo: z.string().describe("Path to the repo"),
+                scan_id: z.string().optional().describe("Explicit scan_id to check"),
+                latest: z.boolean().optional().describe("Get status of latest scan for this repo")
+            })
         },
-        async ({ scan_id, latest }) => {
+        async ({ repo, scan_id = undefined, latest = false }) => {
             try {
-                const client = await initializeClient();
+                if (!vulnzapClient) {
+                    console.error('Failed to initialize VulnzapClient');
+                    process.exit(1);
+                }
 
                 let targetScanId: string | undefined;
                 let scanMetadata;
 
                 if (latest) {
                     // Get latest scan for current repo
-                    const repo = getRepositoryUrl() || ".";
-                    scanMetadata = scanState.getLatestScan(repo);
+                    const repository = getRepositoryUrl(repo);
+                    if (!repository) {
+                        return {
+                            content: [
+                                {
+                                    type: "text",
+                                    text: JSON.stringify({
+                                        ready: false,
+                                        message: "Could not determine repository URL"
+                                    }, null, 2)
+                                }
+                            ]
+                        };
+                    }
+                    scanMetadata = await vulnzapClient.getLatestCachedCommitScan(repository);
                     if (!scanMetadata) {
                         return {
                             content: [
@@ -344,27 +349,24 @@ function setupVulnzapTools(server: McpServer): void {
                             ]
                         };
                     }
-                    targetScanId = scanMetadata.scan_id;
-                } else if (scan_id) {
-                    scanMetadata = scanState.getScan(scan_id);
-                    if (!scanMetadata) {
+                    targetScanId = scanMetadata.jobId;
+                } else {
+                    // Default to latest
+                    const repository = getRepositoryUrl(repo);
+                    if (!repository) {
                         return {
                             content: [
                                 {
                                     type: "text",
                                     text: JSON.stringify({
                                         ready: false,
-                                        message: `Scan ${scan_id} not found. It may have expired or never existed.`
+                                        message: "Could not determine repository URL, check if you are in a git repository"
                                     }, null, 2)
                                 }
                             ]
                         };
                     }
-                    targetScanId = scan_id;
-                } else {
-                    // Default to latest
-                    const repo = getRepositoryUrl() || ".";
-                    scanMetadata = scanState.getLatestScan(repo);
+                    scanMetadata = await vulnzapClient.getLatestCachedCommitScan(repository);
                     if (!scanMetadata) {
                         return {
                             content: [
@@ -378,7 +380,7 @@ function setupVulnzapTools(server: McpServer): void {
                             ]
                         };
                     }
-                    targetScanId = scanMetadata.scan_id;
+                    targetScanId = scanMetadata.jobId;
                 }
 
                 if (!scanMetadata || !targetScanId) {
@@ -397,23 +399,17 @@ function setupVulnzapTools(server: McpServer): void {
 
                 // Try to get completed scan results from client cache/API
                 try {
-                    const results = await client.getCompletedCommitScan(scanMetadata.jobId);
+                    const results = await vulnzapClient.getCompletedCommitScan(targetScanId);
                     
                     // Check if scan is completed and has results
                     if (results.status === 'completed' && results.results) {
-                        // Extract findings from results (structure may vary)
-                        const findings = results.results.findings || results.results || [];
-                        const open_issues = transformFindings(findings);
-                        const counts = calculateCounts(findings);
-
                         return {
                             content: [
                                 {
                                     type: "text",
                                     text: JSON.stringify({
                                         ready: true,
-                                        open_issues,
-                                        counts,
+                                        findings: results.results,
                                         next_hint: "fix issues, then call scan_diff again before next commit"
                                     }, null, 2)
                                 }
@@ -469,16 +465,21 @@ function setupVulnzapTools(server: McpServer): void {
     );
 
     // Tool 3: vulnzap.full_scan
-    server.tool(
-        "vulnzap.full_scan",
-        "Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.",
+    server.registerTool(
+        'vulnzap.full_scan',
         {
-            repo: z.string().optional().default(".").describe("Repository path"),
-            mode: z.string().optional().default("baseline").describe("Scan mode, should be 'baseline'")
+            title: "Baseline scan for the entire repository",
+            description: "Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.",
+            inputSchema: z.object({
+                repo: z.string().describe("Path to the repo"),
+            })
         },
-        async ({ repo, mode }) => {
+        async ({ repo }) => {
             try {
-                const client = await initializeClient();
+                if (!vulnzapClient) {
+                    console.error('Failed to initialize VulnzapClient');
+                    process.exit(1);
+                }
 
                 // Check if it's a git repository
                 if (!isGitRepository(repo)) {
@@ -515,7 +516,7 @@ function setupVulnzapTools(server: McpServer): void {
                 const userIdentifier = getUserIdentifier(repo) || 'unknown';
 
                 // Start repository scan
-                const response = await client.scanRepository({
+                const response = await vulnzapClient.scanRepository({
                     repository,
                     branch,
                     userIdentifier
@@ -523,7 +524,7 @@ function setupVulnzapTools(server: McpServer): void {
 
                 // Generate scan_id and register scan
                 const jobId = response.data.jobId;
-                const scan_id = generateScanId(jobId, 'full');
+                const scan_id = jobId;
                 scanState.registerScan({
                     scan_id,
                     jobId,
@@ -561,19 +562,56 @@ function setupVulnzapTools(server: McpServer): void {
     );
 
     // Tool 4: vulnzap.report
-    server.tool(
-        "vulnzap.report",
-        "Human readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.",
+    server.registerTool(
+        'vulnzap.report',
         {
-            scan_id: z.string().describe("Scan ID to generate report for"),
-            format: z.string().optional().default("md").describe("Report format, currently only 'md' supported")
+            title: "Human readable snapshot of the last scan results",
+            description: "Human readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.",
+            inputSchema: z.object({
+                repo: z.string().describe("Path to the repo"),
+                scan_id: z.string().describe("Scan ID to generate report for")
+            })
         },
-        async ({ scan_id, format }) => {
+        async ({ repo, scan_id }) => {
             try {
-                const client = await initializeClient();
+                if (!vulnzapClient) {
+                    console.error('Failed to initialize VulnzapClient');
+                    process.exit(1);
+                }
 
-                const scanMetadata = scanState.getScan(scan_id);
-                if (!scanMetadata) {
+                // Check if it's a git repository
+                if (!isGitRepository(repo)) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Not a git repository",
+                                    message: `The path "${repo}" is not a git repository. Please run this tool from within a git repository.`
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                // Get repository URL
+                const repository = getRepositoryUrl(repo);
+                if (!repository) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Could not determine repository URL",
+                                    message: "Unable to get repository URL from git remote. Ensure origin remote is configured."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+
+                const results = await vulnzapClient.getCompletedCommitScan(scan_id);
+                if (!results) {
                     return {
                         content: [
                             {
@@ -586,9 +624,6 @@ function setupVulnzapTools(server: McpServer): void {
                         ]
                     };
                 }
-
-                // Get scan results
-                const results = await client.getCompletedCommitScan(scanMetadata.jobId);
 
                 if (results.status !== 'completed' || !results.results) {
                     return {
@@ -604,37 +639,12 @@ function setupVulnzapTools(server: McpServer): void {
                     };
                 }
 
-                // Extract findings from results (structure may vary)
-                const findings = results.results.findings || results.results || [];
-
-                // Generate markdown report
-                let markdown = "## Vulnzap Findings\n\n";
-                
-                if (findings.length === 0) {
-                    markdown += "✅ No vulnerabilities found.\n";
-                } else {
-                    const counts = calculateCounts(findings);
-                    markdown += `### Summary\n\n`;
-                    markdown += `- Total findings: ${findings.length}\n`;
-                    if (counts.critical) markdown += `- Critical: ${counts.critical}\n`;
-                    markdown += `- High: ${counts.high}\n`;
-                    markdown += `- Medium: ${counts.medium}\n`;
-                    markdown += `- Low: ${counts.low}\n\n`;
-
-                    markdown += `### Details\n\n`;
-                    findings.forEach((finding: any, index: number) => {
-                        const severity = (finding.severity || 'medium').toUpperCase();
-                        markdown += `#### [${severity}] ${finding.file || 'unknown'}:L${finding.line || '?'}\n\n`;
-                        markdown += `${finding.message || 'No description'}\n\n`;
-                    });
-                }
-
                 return {
                     content: [
                         {
                             type: "text",
                             text: JSON.stringify({
-                                markdown
+                                report: results.results
                             }, null, 2)
                         }
                     ]

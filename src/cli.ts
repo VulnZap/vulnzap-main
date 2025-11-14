@@ -259,44 +259,6 @@ program
               continue;
             }
           }
-
-          // Install extension for all supported IDEs
-          const extSpinner = createSpinner(`Installing VulnZap extension for ${selectedIde}...`);
-          extSpinner.start();
-          try {
-            const result = await installIDEExtension(selectedIde);
-            if (result.success) {
-              extSpinner.succeed(typography.success(`${selectedIde} extension installed successfully`));
-
-              // Show instructions for the IDE
-              if (result.instructions && result.instructions.length > 0) {
-                spacing.line();
-                result.instructions.forEach(instruction => {
-                  if (instruction === '') {
-                    console.log('');
-                  } else {
-                    console.log(typography.muted(instruction));
-                  }
-                });
-              }
-            } else {
-              extSpinner.warn(typography.warning(`${selectedIde} extension installation had issues`));
-
-              // Show error and instructions
-              if (result.error) {
-                console.log(typography.error(`Error: ${result.error}`));
-              }
-              if (result.instructions && result.instructions.length > 0) {
-                spacing.line();
-                result.instructions.forEach(instruction => {
-                  console.log(typography.muted(instruction));
-                });
-              }
-            }
-          } catch (error: any) {
-            extSpinner.fail(typography.error(`${selectedIde} extension installation failed`));
-            console.error(typography.error('Error:'), error.message);
-          }
         }
 
         spacing.section();
@@ -477,44 +439,6 @@ program
                 continue;
               }
             }
-
-            // Install extension for all supported IDEs
-            const extSpinner = createSpinner(`Installing VulnZap extension for ${selectedIde}...`);
-            extSpinner.start();
-            try {
-              const result = await installIDEExtension(selectedIde);
-              if (result.success) {
-                extSpinner.succeed(typography.success(`${selectedIde} extension installed successfully`));
-
-                // Show instructions for the IDE
-                if (result.instructions && result.instructions.length > 0) {
-                  spacing.line();
-                  result.instructions.forEach(instruction => {
-                    if (instruction === '') {
-                      console.log('');
-                    } else {
-                      console.log(typography.muted(instruction));
-                    }
-                  });
-                }
-              } else {
-                extSpinner.warn(typography.warning(`${selectedIde} extension installation had issues`));
-
-                // Show error and instructions
-                if (result.error) {
-                  console.log(typography.error(`Error: ${result.error}`));
-                }
-                if (result.instructions && result.instructions.length > 0) {
-                  spacing.line();
-                  result.instructions.forEach(instruction => {
-                    console.log(typography.muted(instruction));
-                  });
-                }
-              }
-            } catch (error: any) {
-              extSpinner.fail(typography.error(`${selectedIde} extension installation failed`));
-              console.error(typography.error('Error:'), error.message);
-            }
           }
 
           // Step 5: Success and next steps
@@ -606,7 +530,6 @@ program
   .command('check <package>')
   .description('Analyze package for security vulnerabilities')
   .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip, go, rust, etc.)')
-  .option('-v, --version <version>', 'Package version')
   .action(async (packageInput, options) => {
     displayBanner();
     console.log(typography.title('Security Analysis'));
@@ -665,9 +588,6 @@ program
       console.log(typography.muted('  2. package-name@version with --ecosystem flag'));
       console.log(typography.code('vulnzap check express@4.17.1 --ecosystem npm'));
       spacing.line();
-      console.log(typography.muted('  3. package-name with --ecosystem and --version flags'));
-      console.log(typography.code('vulnzap check express --ecosystem npm --version 4.17.1'));
-      spacing.section();
       console.log(typography.muted('Supported ecosystems: npm, pip, go, rust, maven, gradle, composer, nuget, pypi'));
       process.exit(1);
     }
@@ -1548,144 +1468,6 @@ function tryEnsureVSCodeSymlink(codePath: string): void {
       }
     }
   } catch {}
-}
-
-// Helper function to install IDE extensions
-async function installIDEExtension(ide: string) {
-  try {
-    const extensionId = 'vulnzap.vulnzap';
-    if (ide === 'vscode') {
-      // Best-effort: ensure VS Code CLI available
-      let codeCmd = 'code';
-      try {
-        execSync(`${codeCmd} --version`, { stdio: 'pipe' });
-      } catch {
-        const resolved = resolveVSCodeCLIPath();
-        if (resolved) {
-          codeCmd = quoteCmdIfNeeded(resolved);
-          tryEnsureVSCodeSymlink(resolved);
-        } else {
-          return { success: false, error: 'VS Code CLI not found', instructions: [
-            'VS Code found but CLI not available in PATH.',
-            'We attempted automatic detection; manual PATH install may be required.',
-            'To add VS Code to PATH:',
-            '  1. Open VS Code',
-            '  2. Press Cmd+Shift+P (Ctrl+Shift+P on Windows/Linux)',
-            '  3. Type "Shell Command: Install \'code\' command in PATH"',
-            '  4. Run the command and restart your terminal'
-          ]};
-        }
-      }
-
-      // Install the VulnZap extension
-      try {
-        execSync(`${codeCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
-        return {
-          success: true,
-          instructions: [
-            'VS Code Extension Setup Complete',
-            '  Extension: VulnZap Security Scanner',
-            '  Auto-scan: Enabled for supported files',
-            '  API Integration: Configured with your account',
-            '',
-            'To use the extension:',
-            '  1. Open a project in VS Code',
-            '  2. Install dependencies or create new files',
-            '  3. VulnZap will automatically scan for vulnerabilities',
-            '  4. Check the Problems panel for security issues'
-          ]
-        };
-      } catch (installError) {
-        return {
-          success: false,
-          error: 'Extension not available in marketplace',
-          instructions: [
-            'VulnZap extension not yet available in marketplace',
-            'Manual installation will be available soon.',
-            'Visit https://vulnzap.com/vscode for updates',
-            'Or install the extension manually from the marketplace'
-          ]
-        };
-      }
-    } else if (ide === 'cursor') {
-      // Install VulnZap extension for Cursor (resolve binary if not on PATH)
-      const extensionId = 'vulnzap.vulnzap';
-      const cursorCmd = quoteCmdIfNeeded(resolveIDECLIPath('cursor') || 'cursor');
-      try {
-        execSync(`${cursorCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
-        return {
-          success: true,
-          instructions: [
-            'Cursor Extension Setup Complete',
-            '  Extension: VulnZap Security Scanner',
-            '  Auto-scan: Enabled for supported files',
-            '  API Integration: Configured with your account',
-            '',
-            'To use the extension:',
-            '  1. Open a project in Cursor',
-            '  2. Install dependencies or create new files',
-            '  3. VulnZap will automatically scan for vulnerabilities',
-            '  4. Check the Problems panel for security issues'
-          ]
-        };
-      } catch (installError) {
-        return {
-          success: false,
-          error: 'Extension installation failed',
-          instructions: [
-            'Cursor Extension Installation Failed',
-            'Manual installation will be available soon.',
-            'Visit https://vulnzap.com/cursor for updates',
-            'Or try installing manually from the marketplace'
-          ]
-        };
-      }
-    } else if (ide === 'windsurf') {
-      // Install VulnZap extension for Windsurf (resolve binary if not on PATH)
-      const extensionId = 'vulnzap.vulnzap';
-      const windsurfCmd = quoteCmdIfNeeded(resolveIDECLIPath('windsurf') || 'windsurf');
-      try {
-        execSync(`${windsurfCmd} --install-extension ${extensionId}`, { stdio: 'pipe' });
-        return {
-          success: true,
-          instructions: [
-            'Windsurf Extension Setup Complete',
-            '  Extension: VulnZap Security Scanner',
-            '  Auto-scan: Enabled for supported files',
-            '  API Integration: Configured with your account',
-            '',
-            'To use the extension:',
-            '  1. Open a project in Windsurf',
-            '  2. Install dependencies or create new files',
-            '  3. VulnZap will automatically scan for vulnerabilities',
-            '  4. Check the Problems panel for security issues'
-          ]
-        };
-      } catch (installError) {
-        return {
-          success: false,
-          error: 'Extension installation failed',
-          instructions: [
-            'Windsurf Extension Installation Failed',
-            'Manual installation will be available soon.',
-            'Visit https://vulnzap.com/windsurf for updates',
-            'Or try installing manually from the marketplace'
-          ]
-        };
-      }
-    } else {
-      return {
-        success: false,
-        error: `Extension installation for ${ide} is not yet automated`,
-        instructions: [
-          `Extension installation for ${ide} is not yet automated.`,
-          'Please visit https://vulnzap.com/docs/ide-integration for manual setup instructions.'
-        ]
-      };
-    }
-  } catch (error: any) {
-    return { success: false, error: error.message, instructions: [] };
-  }
 }
 
 // Helper function to handle IDE connection logic

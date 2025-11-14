@@ -28,6 +28,13 @@ export function getRepositoryUrl(repoPath: string = '.'): string | null {
       encoding: 'utf-8',
       stdio: ['ignore', 'pipe', 'ignore']
     });
+
+    // If remote is not configured, try to get the folder name as the repository URL
+    if (!result.trim()) {
+      const folderName = repoPath.split('/').pop();
+      return folderName ? `https://github.com/${folderName}` : null;
+    }
+
     return normalizeRepoUrl(result.trim());
   } catch (error) {
     return null;
