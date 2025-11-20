@@ -185,7 +185,7 @@ program
 
           if (installedIDEs.length === 0) {
             console.log(typography.warning('No supported IDEs detected on your system'));
-            console.log(typography.dim('Supported IDEs: Cursor, Windsurf, Antigravity, Claude Code'));
+            console.log(typography.dim('Supported IDEs: VS Code, Cursor, Windsurf, JetBrains, Antigravity, Claude Code'));
             console.log(typography.dim('You can still configure them manually later'));
             selectedIDEs = [];
           }
@@ -196,8 +196,10 @@ program
             const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
 
             let name = '';
-            if (ide === 'cursor') name = 'Cursor IDE';
-            else if (ide === 'windsurf') name = 'Windsurf IDE';
+            if (ide === 'vscode') name = 'VS Code + GitHub Copilot';
+            else if (ide === 'cursor') name = 'Cursor IDE + GitHub Copilot';
+            else if (ide === 'windsurf') name = 'Windsurf + GitHub Copilot';
+            else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc) + Copilot';
             else if (ide === 'antigravity') name = 'Antigravity';
             else if (ide === 'claude') name = 'Claude Code';
             else name = ide;
@@ -358,7 +360,7 @@ program
 
       if (installedIDEs.length === 0) {
         console.log(typography.warning('No supported IDEs detected on your system'));
-        console.log(typography.dim('Supported IDEs: Cursor, Windsurf, Antigravity, Claude Code'));
+        console.log(typography.dim('Supported IDEs: VS Code, Cursor, Windsurf, JetBrains, Antigravity, Claude Code'));
         console.log(typography.dim('You can still configure them manually later'));
       } else {
         // Create choices for multiselect with installed status
@@ -367,8 +369,10 @@ program
           const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
 
           let name = '';
-          if (ide === 'cursor') name = 'Cursor IDE';
-          else if (ide === 'windsurf') name = 'Windsurf IDE';
+          if (ide === 'vscode') name = 'VS Code + GitHub Copilot';
+          else if (ide === 'cursor') name = 'Cursor IDE + GitHub Copilot';
+          else if (ide === 'windsurf') name = 'Windsurf + GitHub Copilot';
+          else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc) + Copilot';
           else if (ide === 'antigravity') name = 'Antigravity';
           else if (ide === 'claude') name = 'Claude Code';
           else name = ide;
@@ -1382,6 +1386,7 @@ if (process.argv.length === 2) {
 async function detectInstalledIDEs(): Promise<string[]> {
   const installedIDEs: string[] = [];
   const supportedIDEs = [
+    { name: 'vscode', command: 'code', displayName: 'VS Code' },
     { name: 'cursor', command: 'cursor', displayName: 'Cursor IDE' },
     { name: 'windsurf', command: 'windsurf', displayName: 'Windsurf IDE' }
   ];
@@ -1396,6 +1401,21 @@ async function detectInstalledIDEs(): Promise<string[]> {
       if (resolved) {
         installedIDEs.push(ide.name);
       }
+    }
+  }
+
+  // Always add JetBrains as an option (if .idea folder exists, likely a JetBrains project)
+  if (fs.existsSync(path.join(process.cwd(), '.idea'))) {
+    if (!installedIDEs.includes('jetbrains')) {
+      installedIDEs.push('jetbrains');
+    }
+  }
+
+  // Always add these as options even if not auto-detected
+  const alwaysAvailable = ['antigravity', 'claude', 'jetbrains'];
+  for (const ide of alwaysAvailable) {
+    if (!installedIDEs.includes(ide)) {
+      installedIDEs.push(ide);
     }
   }
 
