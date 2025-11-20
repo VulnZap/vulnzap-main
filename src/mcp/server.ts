@@ -156,7 +156,7 @@ function setupVulnzapTools(server: McpServer): void {
         'vulnzap.scan_diff',
         {
             title: "Scan the current diff",
-            description: "Fast, incremental, non-blocking scan on the current diff. Fire-and-forget: call this and continue coding, then poll results via vulnzap.status.",
+            description: "Triggers a fast, non-blocking security scan on your local changes. Call this tool immediately after making a local commit. Do not wait for the results; continue with your next task. You will check the results of this scan later using vulnzap.status before your next commit.",
             inputSchema: z.object({
                 repo: z.string().describe("Path to the repo"),
                 since: z.string().optional().default("HEAD").describe("Commit or ref to diff against, usually 'HEAD'"),
@@ -302,7 +302,7 @@ function setupVulnzapTools(server: McpServer): void {
         'vulnzap.status',
         {
             title: "Get the latest results for a scan or for the latest scan",
-            description: "Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.",
+            description: "Retrieves the results of the most recent security scan. Call this tool before making a new commit to ensure your previous changes were secure. If vulnerabilities are found, fix them before proceeding. Do not poll this tool repeatedly; only check it when you are ready to commit new work or if you need to verify a fix.",
             inputSchema: z.object({
                 repo: z.string().describe("Path to the repo"),
                 scan_id: z.string().optional().describe("Explicit scan_id to check"),
@@ -400,7 +400,7 @@ function setupVulnzapTools(server: McpServer): void {
                 // Try to get completed scan results from client cache/API
                 try {
                     const results = await vulnzapClient.getCompletedCommitScan(targetScanId);
-                    
+
                     // Check if scan is completed and has results
                     if (results.status === 'completed' && results.results) {
                         return {
@@ -469,7 +469,7 @@ function setupVulnzapTools(server: McpServer): void {
         'vulnzap.full_scan',
         {
             title: "Baseline scan for the entire repository",
-            description: "Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.",
+            description: "Performs a comprehensive security scan of the entire repository. Run this tool when you are preparing to push code to a remote repository or deploy to production. This ensures no vulnerabilities are introduced into the codebase. This is a long-running operation.",
             inputSchema: z.object({
                 repo: z.string().describe("Path to the repo"),
             })
