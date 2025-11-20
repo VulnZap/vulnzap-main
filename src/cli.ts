@@ -50,39 +50,7 @@ const ensureVulnzapFolder = () => {
 };
 ensureVulnzapFolder();
 
-// Enhanced banner display with Apple-inspired design
-const displayBanner = () => {
-  console.log(chalk.gray(`
-              _       _____            
- /\\   /\\_   _| |_ __ / _  / __ _ _ __  
- \\ \\ / | | | | | '_ \\\\// / / _\` | '_ \\ 
-  \\ V /| |_| | | | | |/ //| (_| | |_) |
-   \\_/  \\__,_|_|_| |_/____/\\__,_| .__/ 
-                                |_|    
-  `));
-  console.log(chalk.white(`  Security-first AI development`));
-  console.log(chalk.gray(`  Version ${version}\n`));
-};
-
-// Enhanced typography helpers
-const typography = {
-  title: (text: string) => chalk.white.bold(text),
-  subtitle: (text: string) => chalk.gray(text),
-  success: (text: string) => chalk.green(text),
-  warning: (text: string) => chalk.yellow(text),
-  error: (text: string) => chalk.red(text),
-  info: (text: string) => chalk.blue(text),
-  muted: (text: string) => chalk.gray.dim(text),
-  accent: (text: string) => chalk.cyan(text),
-  code: (text: string) => chalk.gray.bgBlack(` ${text} `),
-};
-
-// Enhanced spacing helpers
-const spacing = {
-  line: () => console.log(''),
-  section: () => console.log('\n'),
-  block: () => console.log('\n\n'),
-};
+import { typography, layout } from './utils/typography.js';
 
 // Enhanced progress indicators
 const createSpinner = (text: string) => {
@@ -115,9 +83,11 @@ program
   .option('-k, --key <key>', 'Provide API key directly')
   .option('--ide <ide-name>', 'Configure IDE integration (cursor, windsurf, cline)')
   .action(async (options) => {
-    displayBanner();
-    console.log(typography.title('Setup Configuration'));
-    spacing.line();
+    layout.banner(version);
+    console.log(typography.header('Setup Configuration'));
+    layout.spacer();
+    console.log(typography.header('Setup Configuration'));
+    layout.spacer();
 
     try {
       // Check if API key already exists
@@ -129,8 +99,8 @@ program
       }
 
       if (existingKey) {
-        console.log(typography.muted('  An API key is already configured'));
-        spacing.line();
+        console.log(typography.dim('  An API key is already configured'));
+        layout.spacer();
 
         const { confirm } = await customPrompts.prompt([
           {
@@ -142,11 +112,11 @@ program
         ]);
 
         if (!confirm) {
-          console.log(typography.muted('  Configuration unchanged'));
+          console.log(typography.dim('  Configuration unchanged'));
 
           if (options.ide) {
-            spacing.section();
-            console.log(typography.info('Configuring IDE integration...'));
+            layout.section();
+            console.log(typography.accent('Configuring IDE integration...'));
             await connectIDE(options.ide);
           }
           return;
@@ -154,11 +124,11 @@ program
       }
 
       if (!options.key) {
-        spacing.line();
-        console.log(typography.muted('  Get your API key from:'));
+        layout.spacer();
+        console.log(typography.dim('  Get your API key from:'));
         console.log(typography.accent(`  https://vulnzap.com/dashboard/api-keys`));
-        console.log(typography.muted('  (Ensure you are signed in to your account)'));
-        spacing.section();
+        console.log(typography.dim('  (Ensure you are signed in to your account)'));
+        layout.section();
       }
 
       let apiKey: string;
@@ -193,9 +163,9 @@ program
       // IDE Selection and Extension Installation
       let selectedIDEs = options.ide ? [options.ide] : [];
       if (selectedIDEs.length === 0) {
-        spacing.section();
-        console.log(typography.info('IDE Integration (Optional)'));
-        spacing.line();
+        layout.section();
+        console.log(typography.accent('IDE Integration (Optional)'));
+        layout.spacer();
 
         const { configureIde } = await customPrompts.prompt([
           {
@@ -215,18 +185,29 @@ program
 
           if (installedIDEs.length === 0) {
             console.log(typography.warning('No supported IDEs detected on your system'));
-            console.log(typography.muted('Supported IDEs: VS Code, Cursor, Windsurf'));
-            console.log(typography.muted('You can still configure them manually later'));
+            console.log(typography.dim('Supported IDEs: Cursor, Windsurf, Antigravity, Claude Code'));
+            console.log(typography.dim('You can still configure them manually later'));
             selectedIDEs = [];
           }
 
-          // Create choices for multiselect
-          const ideChoices = installedIDEs.map(ide => ({
-            name: ide === 'vscode' ? 'VS Code' :
-                  ide === 'cursor' ? 'Cursor IDE' :
-                  ide === 'windsurf' ? 'Windsurf IDE' : ide,
-            value: ide
-          }));
+          // Create choices for multiselect with installed status
+          const ideChoices = installedIDEs.map(ide => {
+            const isInstalled = isMcpInstalled(ide);
+            const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
+
+            let name = '';
+            if (ide === 'cursor') name = 'Cursor IDE';
+            else if (ide === 'windsurf') name = 'Windsurf IDE';
+            else if (ide === 'antigravity') name = 'Antigravity';
+            else if (ide === 'claude') name = 'Claude Code';
+            else name = ide;
+
+            return {
+              name: `${name}${installedTag}`,
+              value: ide,
+              checked: !isInstalled // Default to unchecked if already installed
+            };
+          });
 
           const { chosenIDEs } = await customPrompts.prompt([
             {
@@ -243,27 +224,25 @@ program
 
       if (selectedIDEs.length > 0) {
         for (const selectedIde of selectedIDEs) {
-          spacing.line();
-          console.log(typography.info(`Setting up ${selectedIde}...`));
+          layout.spacer();
+          console.log(typography.accent(`Setting up ${selectedIde}...`));
 
-          // Configure MCP for supported IDEs (all except vscode)
-          if (selectedIde !== 'vscode') {
-            const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
-            mcpSpinner.start();
-            try {
-              await connectIDE(selectedIde);
-              mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
-            } catch (error: any) {
-              mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
-              console.error(typography.error('Error:'), error.message);
-              continue;
-            }
+          // Configure MCP for all supported IDEs
+          const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
+          mcpSpinner.start();
+          try {
+            await connectIDE(selectedIde);
+            mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
+          } catch (error: any) {
+            mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
+            console.error(typography.error('Error:'), error.message);
+            continue;
           }
         }
 
-        spacing.section();
+        layout.section();
         console.log(typography.success('IDE setup complete!'));
-        console.log(typography.muted('Your development environments are now secured with VulnZap'));
+        console.log(typography.dim('Your development environments are now secured with VulnZap'));
       }
 
     } catch (error: any) {
@@ -279,8 +258,8 @@ program
   .action(async () => {
     // Handle Ctrl+C gracefully
     const handleExit = () => {
-      spacing.line();
-      console.log(typography.muted('Setup cancelled. Run `vulnzap init` again anytime.'));
+      layout.spacer();
+      console.log(typography.dim('Setup cancelled. Run `vulnzap init` again anytime.'));
       process.exit(0);
     };
 
@@ -288,10 +267,10 @@ program
     process.on('SIGTERM', handleExit);
 
     try {
-      displayBanner();
-      console.log(typography.title('Welcome to VulnZap'));
-      console.log(typography.subtitle('Let\'s configure your security-first development environment.'));
-      spacing.section();
+      layout.banner(version);
+      console.log(typography.header('Welcome to VulnZap'));
+      console.log(typography.subheader('Let\'s configure your security-first development environment.'));
+      layout.section();
 
       // Step 1: Welcome and options
       const { welcomeChoice } = await customPrompts.prompt([
@@ -308,8 +287,8 @@ program
       ]);
 
       if (welcomeChoice === 'visit') {
-        spacing.line();
-        console.log(typography.info(`Visit 'https://vulnzap.com' to learn more`));
+        layout.spacer();
+        console.log(typography.accent(`Visit 'https://vulnzap.com' to learn more`));
         process.exit(0);
       }
 
@@ -323,7 +302,7 @@ program
 
       if (existingKey) {
         console.log(typography.success('Authentication configured'));
-        spacing.line();
+        layout.spacer();
 
         const { replaceKey } = await customPrompts.prompt([
           {
@@ -335,62 +314,41 @@ program
         ]);
 
         if (!replaceKey) {
-          console.log(typography.muted('  Using existing authentication'));
+          console.log(typography.dim('  Using existing authentication'));
         } else {
           existingKey = null;
         }
       }
 
-      // Step 3: Authentication flow
+      // Step 3: Magic Auth Flow
       if (!existingKey) {
-        spacing.section();
-        console.log(typography.info('Setting up authentication'));
-        console.log(typography.muted('  You will be redirected to your browser for secure login'));
-        spacing.line();
+        const { displayMagicAuth, displayAuthWaiting, displayAuthSuccess, displayAuthError } = await import('./utils/magicAuth.js');
 
-        const spinner = createSpinner('Initializing authentication...');
-        spinner.start();
+        await displayMagicAuth();
 
         try {
-          spinner.text = 'Opening browser for authentication...';
-
           const { success, error } = await auth.login("login");
 
           if (success) {
-            spinner.succeed(typography.success('Authentication successful'));
-
-            // Show personalized welcome message
+            await displayAuthSuccess();
+            await displayUserWelcome();
           } else {
-            spinner.fail('Authentication failed');
-            if (error) {
-              console.error(typography.error('Error:'), error);
-            }
-            spacing.line();
-            console.log(typography.muted('Manual setup alternative:'));
-            console.log(typography.muted('  1. Visit https://vulnzap.com/dashboard/api-keys'));
-            console.log(typography.muted('  2. Copy your API key'));
-            console.log(typography.code('vulnzap setup -k <your-api-key>'));
+            displayAuthError(error);
             process.exit(1);
           }
         } catch (error: any) {
-          spinner.fail('Authentication failed');
-          console.error(typography.error('Error:'), error.message);
-          spacing.line();
-          console.log(typography.muted('Manual setup alternative:'));
-          console.log(typography.muted('  1. Visit https://vulnzap.com/dashboard/api-keys'));
-          console.log(typography.muted('  2. Copy your API key'));
-          console.log(typography.code('vulnzap setup -k <your-api-key>'));
+          displayAuthError(error.message);
           process.exit(1);
         }
+      } else {
+        // Show personalized welcome message for existing users
+        await displayUserWelcome();
       }
 
-      // Show personalized welcome message
-      await displayUserWelcome();
-
       // Step 4: IDE Selection and Configuration
-      spacing.section();
-      console.log(typography.info('Setting up IDE integration'));
-      spacing.line();
+      layout.section();
+      console.log(typography.accent('Setting up IDE integration'));
+      layout.spacer();
 
       // Detect installed IDEs
       const ideSpinner = createSpinner('Detecting installed IDEs...');
@@ -400,16 +358,27 @@ program
 
       if (installedIDEs.length === 0) {
         console.log(typography.warning('No supported IDEs detected on your system'));
-        console.log(typography.muted('Supported IDEs: VS Code, Cursor, Windsurf'));
-        console.log(typography.muted('You can still configure them manually later'));
+        console.log(typography.dim('Supported IDEs: Cursor, Windsurf, Antigravity, Claude Code'));
+        console.log(typography.dim('You can still configure them manually later'));
       } else {
-        // Create choices for multiselect
-        const ideChoices = installedIDEs.map(ide => ({
-          name: ide === 'vscode' ? 'VS Code' :
-                ide === 'cursor' ? 'Cursor IDE' :
-                ide === 'windsurf' ? 'Windsurf IDE' : ide,
-          value: ide
-        }));
+        // Create choices for multiselect with installed status
+        const ideChoices = installedIDEs.map(ide => {
+          const isInstalled = isMcpInstalled(ide);
+          const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
+
+          let name = '';
+          if (ide === 'cursor') name = 'Cursor IDE';
+          else if (ide === 'windsurf') name = 'Windsurf IDE';
+          else if (ide === 'antigravity') name = 'Antigravity';
+          else if (ide === 'claude') name = 'Claude Code';
+          else name = ide;
+
+          return {
+            name: `${name}${installedTag}`,
+            value: ide,
+            checked: !isInstalled // Default to unchecked if already installed
+          };
+        });
 
         const { selectedIDEs } = await customPrompts.prompt([
           {
@@ -423,56 +392,79 @@ program
 
         if (selectedIDEs.length > 0) {
           for (const selectedIde of selectedIDEs) {
-            spacing.line();
-            console.log(typography.info(`Setting up ${selectedIde}...`));
+            layout.spacer();
+            console.log(typography.accent(`Setting up ${selectedIde}...`));
 
-            // Configure MCP for supported IDEs (all except vscode)
-            if (selectedIde !== 'vscode') {
-              const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
-              mcpSpinner.start();
-              try {
-                await connectIDE(selectedIde);
-                mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
-              } catch (error: any) {
-                mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
-                console.error(typography.error('Error:'), error.message);
-                continue;
-              }
+            // Configure MCP for all supported IDEs
+            const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
+            mcpSpinner.start();
+            try {
+              await connectIDE(selectedIde);
+              mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
+            } catch (error: any) {
+              mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
+              console.error(typography.error('Error:'), error.message);
+              continue;
             }
           }
 
-          // Step 5: Success and next steps
-          spacing.section();
-          console.log(typography.title('Setup Complete'));
+          // Step 5: Tool Spotlight - Show users what they just unlocked
+          if (selectedIDEs.length > 0) {
+            layout.section();
+            const { wantSpotlight } = await customPrompts.prompt([
+              {
+                type: 'confirm',
+                name: 'wantSpotlight',
+                message: 'Would you like a quick tour of the security tools now available to your AI?',
+                default: true
+              }
+            ]);
+
+            if (wantSpotlight) {
+              const { displayToolSpotlight } = await import('./utils/toolSpotlight.js');
+              await displayToolSpotlight();
+            } else {
+              const { displayToolSummary } = await import('./utils/toolSpotlight.js');
+              displayToolSummary();
+            }
+          }
         } else {
-          console.log(typography.info('No IDEs selected'));
-          console.log(typography.muted('You can configure them manually later'));
+          console.log(typography.accent('No IDEs selected'));
+          console.log(typography.dim('You can configure them manually later'));
         }
       }
 
-      // Step 5: Success and next steps (only show if IDE setup was attempted)
-      spacing.section();
-      console.log(typography.title('Setup Complete'));
-      console.log(typography.subtitle('VulnZap is now protecting your AI-generated code'));
-      spacing.section();
+      // Final: Premium completion screen
+      layout.clear();
+      layout.section();
 
-      console.log(typography.info('What\'s next:'));
-      console.log(typography.muted('  • Start coding - vulnerabilities will be caught automatically'));
-      console.log(typography.muted('  • View detailed logs at vulnzap.com/dashboard/logs'));
-      console.log(typography.muted('  • Run `vulnzap check <package>` to manually scan packages'));
-      console.log(typography.muted('  • Run `vulnzap status` to verify everything is working'));
-      spacing.section();
+      // Success Banner
+      console.log(typography.header('  🎉 Setup Complete'));
+      layout.spacer();
+      console.log(typography.subheader('  VulnZap is now protecting your AI-powered development'));
+      layout.section();
 
-      console.log(typography.muted('Need help? Visit vulnzap.com/docs or run `vulnzap help`'));
+      // Quick actions
+      console.log(typography.accent('  Quick Start:'));
+      console.log(typography.body('  • Open your IDE and start coding'));
+      console.log(typography.body('  • Your AI now has security superpowers'));
+      console.log(typography.body('  • Vulnerabilities will be caught automatically'));
+      layout.section();
+
+      // Additional resources
+      console.log(typography.dim('  📖 Documentation: vulnzap.com/docs'));
+      console.log(typography.dim('  🔧 Run `vulnzap status` to verify setup'));
+      console.log(typography.dim('  💬 Need help? vulnzap.com/support'));
+      layout.section();
 
     } catch (error: any) {
-      spacing.section();
+      layout.section();
       console.error(typography.error('Setup failed:'), error.message);
-      spacing.line();
-      console.log(typography.muted('Recovery options:'));
-      console.log(typography.muted('  • Run `vulnzap init` again to retry'));
-      console.log(typography.muted('  • Run `vulnzap setup` for manual configuration'));
-      console.log(typography.muted('  • Visit vulnzap.com/support for help'));
+      layout.spacer();
+      console.log(typography.dim('Recovery options:'));
+      console.log(typography.dim('  • Run `vulnzap init` again to retry'));
+      console.log(typography.dim('  • Run `vulnzap setup` for manual configuration'));
+      console.log(typography.dim('  • Visit vulnzap.com/support for help'));
       process.exit(1);
     } finally {
       process.removeListener('SIGINT', handleExit);
@@ -484,9 +476,9 @@ program
   .command("status")
   .description('Check system health and configuration')
   .action(async () => {
-    displayBanner();
-    console.log(typography.title('System Status'));
-    spacing.line();
+    layout.banner(version);
+    console.log(typography.header('System Status'));
+    layout.spacer();
 
     const spinner = createSpinner('Checking server health...');
     spinner.start();
@@ -496,7 +488,7 @@ program
       spinner.succeed(typography.success('Server is healthy'));
 
       // Check authentication
-      spacing.line();
+      layout.spacer();
       const authSpinner = createSpinner('Checking authentication...');
       authSpinner.start();
 
@@ -505,23 +497,23 @@ program
         authSpinner.succeed(typography.success('Authentication configured'));
 
         // Show user profile information
-        spacing.section();
+        layout.section();
         await displayUserStatus();
 
       } catch (error) {
         authSpinner.fail(typography.warning('Authentication not configured'));
-        spacing.line();
-        console.log(typography.muted('Run `vulnzap setup` to configure authentication'));
+        layout.spacer();
+        console.log(typography.dim('Run `vulnzap setup` to configure authentication'));
       }
 
-      spacing.section();
-      console.log(typography.info('System ready for secure development'));
+      layout.section();
+      console.log(typography.accent('System ready for secure development'));
 
     } catch (error: any) {
       spinner.fail(typography.warning('Server is offline'));
-      spacing.line();
-      console.log(typography.muted('Local cache will be used when available'));
-      console.log(typography.muted('Some features may be limited'));
+      layout.spacer();
+      console.log(typography.dim('Local cache will be used when available'));
+      console.log(typography.dim('Some features may be limited'));
     }
   });
 
@@ -531,9 +523,9 @@ program
   .description('Analyze package for security vulnerabilities')
   .option('-e, --ecosystem <ecosystem>', 'Package ecosystem (npm, pip, go, rust, etc.)')
   .action(async (packageInput, options) => {
-    displayBanner();
-    console.log(typography.title('Security Analysis'));
-    spacing.line();
+    layout.banner(version);
+    console.log(typography.header('Vulnerability Scan'));
+    layout.spacer();
 
     let packageName, packageVersion, packageEcosystem;
 
@@ -580,15 +572,15 @@ program
     // If any components are missing, show specific error messages
     if (missingComponents.length > 0) {
       console.error(typography.error(`Missing required ${missingComponents.join(', ')}`));
-      spacing.section();
-      console.log(typography.info('Supported formats:'));
-      console.log(typography.muted('  1. ecosystem:package-name@version (recommended)'));
+      layout.section();
+      console.log(typography.accent('Supported formats:'));
+      console.log(typography.dim('  1. ecosystem:package-name@version (recommended)'));
       console.log(typography.code('vulnzap check npm:express@4.17.1'));
-      spacing.line();
-      console.log(typography.muted('  2. package-name@version with --ecosystem flag'));
+      layout.spacer();
+      console.log(typography.dim('  2. package-name@version with --ecosystem flag'));
       console.log(typography.code('vulnzap check express@4.17.1 --ecosystem npm'));
-      spacing.line();
-      console.log(typography.muted('Supported ecosystems: npm, pip, go, rust, maven, gradle, composer, nuget, pypi'));
+      layout.spacer();
+      console.log(typography.dim('Supported ecosystems: npm, pip, go, rust, maven, gradle, composer, nuget, pypi'));
       process.exit(1);
     }
 
@@ -596,12 +588,12 @@ program
     const supportedEcosystems = ['npm', 'pip', 'go', 'rust', 'maven', 'gradle', 'composer', 'nuget', 'pypi'];
     if (!supportedEcosystems.includes(packageEcosystem.toLowerCase())) {
       console.error(typography.error(`Unsupported ecosystem '${packageEcosystem}'`));
-      console.log(typography.muted(`Supported ecosystems: ${supportedEcosystems.join(', ')}`));
+      console.log(typography.dim(`Supported ecosystems: ${supportedEcosystems.join(', ')}`));
       process.exit(1);
     }
 
-    console.log(typography.muted(`  Analyzing ${packageEcosystem}:${packageName}@${packageVersion}`));
-    spacing.line();
+    console.log(typography.dim(`  Analyzing ${packageEcosystem}:${packageName}@${packageVersion}`));
+    layout.spacer();
 
     const spinner = createSpinner('Scanning for vulnerabilities...');
     spinner.start();
@@ -619,53 +611,53 @@ program
 
       spinner.succeed(typography.success('Analysis complete'));
 
-      spacing.line();
+      layout.spacer();
 
       if (result.results[0].status === 'safe') {
         console.log(typography.success('Result: Secure'));
-        console.log(typography.muted(`  ${packageName}@${packageVersion} has no known vulnerabilities`));
-        spacing.line();
+        console.log(typography.dim(`  ${packageName}@${packageVersion} has no known vulnerabilities`));
+        layout.spacer();
         return;
       }
       if (result.results[0].status === 'vulnerable') {
         console.log(typography.error('Result: Vulnerable'));
-        console.log(typography.muted(`  ${packageName}@${packageVersion} has security vulnerabilities`));
-        spacing.section();
+        console.log(typography.dim(`  ${packageName}@${packageVersion} has security vulnerabilities`));
+        layout.section();
 
         if (result.results[0].vulnerabilities && result.results[0].vulnerabilities.length > 0) {
-          console.log(typography.info('AI Analysis'));
-          spacing.line();
-          console.log(typography.subtitle('Summary'));
-          console.log(typography.muted(`  ${result.results[0].vulnerabilities[0].title}`));
-          spacing.line();
-          console.log(typography.subtitle('Impact'));
-          console.log(typography.muted(`  ${result.results[0].vulnerabilities[0].description}`));
-          spacing.line();
-          console.log(typography.subtitle('Recommendations'));
+          console.log(typography.accent('AI Analysis'));
+          layout.spacer();
+          console.log(typography.subheader('Summary'));
+          console.log(typography.dim(`  ${result.results[0].vulnerabilities[0].title}`));
+          layout.spacer();
+          console.log(typography.subheader('Impact'));
+          console.log(typography.dim(`  ${result.results[0].vulnerabilities[0].description}`));
+          layout.spacer();
+          console.log(typography.subheader('Recommendations'));
           result.results[0].vulnerabilities.forEach((vulnerability: any) => {
-            console.log(typography.muted(`  • ${vulnerability.description}`));
+            console.log(typography.dim(`  • ${vulnerability.description}`));
           });
-          spacing.section();
+          layout.section();
         }
 
-        console.log(typography.info('Vulnerability Details'));
-        spacing.line();
+        console.log(typography.accent('Vulnerability Details'));
+        layout.spacer();
         // Display vulnerability details
         result.results[0].vulnerabilities?.forEach((advisory: { title: string; severity: string; description: string; references?: string[] }) => {
           console.log(typography.warning(`• ${advisory.title}`));
-          console.log(typography.muted(`  Severity: ${advisory.severity}`));
-          console.log(typography.muted(`  ${advisory.description}`));
+          console.log(typography.dim(`  Severity: ${advisory.severity}`));
+          console.log(typography.dim(`  ${advisory.description}`));
           if (advisory.references?.length) {
-            console.log(typography.muted(`  References: ${advisory.references.join(', ')}`));
+            console.log(typography.dim(`  References: ${advisory.references.join(', ')}`));
           }
-          spacing.line();
+          layout.spacer();
         });
 
         // Suggest fixed version if available
         if (result.results[0].remediation && result.results[0].remediation.recommendedVersion) {
-          console.log(typography.info('Recommended Fix'));
+          console.log(typography.accent('Recommended Fix'));
           console.log(typography.accent(`  Upgrade to ${result.results[0].remediation.recommendedVersion} or later`));
-          spacing.line();
+          layout.spacer();
         }
       }
     } catch (error: any) {
@@ -674,62 +666,73 @@ program
         console.log(typography.warning('VulnZap server is offline. Using local cache if available.'));
         const cached = cacheService.readCache(packageName, packageVersion, packageEcosystem);
         if (cached) {
-          console.log(chalk.green('✓') + ' Found cached scan result (from local cache, may be outdated):');
+          console.log(typography.success('Found cached scan result (from local cache, may be outdated)'));
+          layout.spacer();
+
           // Print cached result in a user-friendly way
           if (cached.error) {
-            console.error(chalk.red('Error:'), cached.error);
+            console.error(typography.error(cached.error));
             return;
           }
           if (cached.isUnknown) {
-            console.log(chalk.yellow('!') + ` Unknown: ${cached.message}`);
+            console.log(typography.warning(`Unknown: ${cached.message}`));
             if (cached.sources && cached.sources.length > 0) {
-              console.log(`  Sources checked: ${cached.sources.join(', ')}`);
+              console.log(typography.dim(`  Sources checked: ${cached.sources.join(', ')}`));
             }
             return;
           }
           if (!cached.isVulnerable) {
-            console.log(chalk.green(`✓ Safe: ${packageName}@${packageVersion} has no known vulnerabilities`));
+            console.log(typography.success(`Safe: ${packageName}@${packageVersion} has no known vulnerabilities`));
             if (cached.sources && cached.sources.length > 0) {
-              console.log(`  Sources checked: ${cached.sources.join(', ')}`);
+              console.log(typography.dim(`  Sources checked: ${cached.sources.join(', ')}`));
             }
-            console.log('');
+            layout.spacer();
             return;
           }
           if (cached.isVulnerable) {
-            console.log(chalk.red(`✗ Vulnerable: ${packageName}@${packageVersion} has vulnerabilities`));
+            console.log(typography.error(`Vulnerable: ${packageName}@${packageVersion} has vulnerabilities`));
+            layout.spacer();
+
             if (cached.processedVulnerabilities && cached.processedVulnerabilities.summary) {
-              console.log(chalk.green(`✓ LLM Processed: `));
-              console.log('');
-              console.log(`1. Summary: `);
-              console.log(`- ${cached.processedVulnerabilities.summary}`);
-              console.log(`2. Impact: `);
-              console.log(`- ${cached.processedVulnerabilities.impact}`);
-              console.log(`3. Recommendations: `);
+              console.log(typography.accent('AI Analysis:'));
+              console.log(typography.body(cached.processedVulnerabilities.summary));
+              layout.spacer();
+
+              console.log(typography.accent('Impact:'));
+              console.log(typography.body(cached.processedVulnerabilities.impact));
+              layout.spacer();
+
+              console.log(typography.accent('Recommendations:'));
               cached.processedVulnerabilities.recommendations.forEach((recommendation: string) => {
-                console.log(`- ${recommendation}`);
+                console.log(typography.body(`• ${recommendation}`));
               });
+              layout.spacer();
             }
 
             if (cached.sources && cached.sources.length > 0) {
-              console.log(`  Sources: ${cached.sources.join(', ')}`);
+              console.log(typography.dim(`Sources: ${cached.sources.join(', ')}`));
+              layout.spacer();
             }
-            console.log('');
+
+            console.log(typography.subheader('Advisories'));
             cached.advisories?.forEach((advisory: { title: string; severity: string; description: string; references?: string[] }) => {
-              console.log(chalk.yellow(`- ${advisory.title}`));
-              console.log(`  Severity: ${advisory.severity}`);
-              console.log(`  Description: ${advisory.description}`);
+              console.log(typography.accent(`• ${advisory.title}`));
+              console.log(typography.dim(`  Severity: ${advisory.severity}`));
+              console.log(typography.dim(`  Description: ${advisory.description}`));
               if (advisory.references?.length) {
-                console.log(`  References: ${advisory.references.join(', ')}`);
+                console.log(typography.dim(`  References: ${advisory.references.join(', ')}`));
               }
-              console.log('');
+              layout.spacer();
             });
+
             if (cached.fixedVersions && cached.fixedVersions.length > 0) {
-              console.log(chalk.green('Suggested fix:'));
-              console.log(`Upgrade to ${cached.fixedVersions[0]} or later\n`);
+              console.log(typography.success('Suggested fix:'));
+              console.log(typography.body(`Upgrade to ${cached.fixedVersions[0]} or later`));
+              layout.spacer();
             }
           }
         } else {
-          console.log(chalk.red('No valid local cache found for this package/version (older than 5 days or never scanned).'));
+          console.log(typography.error('No valid local cache found for this package/version (older than 5 days or never scanned).'));
         }
         process.exit(1);
       } else {
@@ -745,9 +748,9 @@ program
   .description('Configure IDE integration')
   .option('--ide <ide-name>', 'IDE to connect with (cursor, cline, windsurf)', 'cursor')
   .action(async (options) => {
-    displayBanner();
-    console.log(typography.title('IDE Integration'));
-    spacing.line();
+    layout.banner(version);
+    console.log(typography.header('MCP Server'));
+    layout.spacer();
 
     // Prompt for IDE if not provided
     if (!options.ide) {
@@ -756,9 +759,10 @@ program
         name: 'ide',
         message: 'Which development environment are you using?',
         choices: [
-          { name: 'Cursor IDE', value: 'cursor' },
-          { name: 'Cline', value: 'cline' },
-          { name: 'Windsurf IDE', value: 'windsurf' }
+          { name: `Cursor IDE${isMcpInstalled('cursor') ? chalk.green(' (Installed)') : ''}`, value: 'cursor' },
+          { name: `Windsurf IDE${isMcpInstalled('windsurf') ? chalk.green(' (Installed)') : ''}`, value: 'windsurf' },
+          { name: `Antigravity (New)${isMcpInstalled('antigravity') ? chalk.green(' (Installed)') : ''}`, value: 'antigravity' },
+          { name: `Claude Code${isMcpInstalled('claude') ? chalk.green(' (Installed)') : ''}`, value: 'claude' }
         ],
         default: 'cursor'
       }]);
@@ -771,8 +775,8 @@ program
     try {
       await connectIDE(options.ide);
       spinner.succeed(typography.success('IDE integration configured'));
-      spacing.line();
-      console.log(typography.muted('Your development environment is now secured with VulnZap'));
+      layout.spacer();
+      console.log(typography.dim('Your development environment is now secured with VulnZap'));
     } catch (error: any) {
       spinner.fail(typography.error('Configuration failed'));
       console.error(typography.error('Error:'), error.message);
@@ -780,30 +784,39 @@ program
     }
   });
 
+// Command: vulnzap tools
+program
+  .command('tools')
+  .description('Learn about the security tools available to your AI')
+  .action(async () => {
+    const { displayToolSpotlight } = await import('./utils/toolSpotlight.js');
+    await displayToolSpotlight();
+  });
+
 // Command: vulnzap account
 program
   .command('account')
   .description('View account information and settings')
   .action(async () => {
-    displayBanner();
-    console.log(typography.title('Account Information'));
-    spacing.section();
+    layout.banner(version);
+    console.log(typography.header('Account Information'));
+    layout.section();
 
     try {
       // Show detailed user status
       await displayUserStatus();
 
-      spacing.section();
-      console.log(typography.info('Dashboard Access'));
-      console.log(typography.muted('  Visit your dashboard to manage account settings:'));
+      layout.section();
+      console.log(typography.accent('Dashboard Access'));
+      console.log(typography.dim('  Visit your dashboard to manage account settings:'));
       console.log(typography.accent('  https://vulnzap.com/dashboard'));
-      spacing.section();
+      layout.section();
 
-      console.log(typography.info('Available Features'));
-      console.log(typography.muted('  • API key management'));
-      console.log(typography.muted('  • Scan history and analytics'));
-      console.log(typography.muted('  • Team collaboration tools'));
-      console.log(typography.muted('  • Integration settings'));
+      console.log(typography.accent('Available Features'));
+      console.log(typography.dim('  • API key management'));
+      console.log(typography.dim('  • Scan history and analytics'));
+      console.log(typography.dim('  • Team collaboration tools'));
+      console.log(typography.dim('  • Integration settings'));
 
     } catch (error: any) {
       console.error(typography.error('Error:'), error.message);
@@ -851,46 +864,55 @@ program
       spinner.succeed('Scan completed');
 
       // Format and display results
-      console.log('\nScan Results:');
-      console.log('-------------');
+      layout.section();
+      console.log(typography.header('Scan Results'));
+      layout.spacer();
 
       const vulnerableCount = results.results.filter(r => r.status === 'vulnerable').length;
       const safeCount = results.results.filter(r => r.status === 'safe').length;
       const errorCount = results.results.filter(r => r.status === 'error').length;
 
-      console.log(`Total packages: ${packages.length}`);
-      console.log(`Vulnerable: ${vulnerableCount}`);
-      console.log(`Safe: ${safeCount}`);
-      console.log(`Errors: ${errorCount}`);
+      console.log(typography.body(`Total packages: ${packages.length}`));
+      console.log(typography.error(`Vulnerable:     ${vulnerableCount}`));
+      console.log(typography.success(`Safe:           ${safeCount}`));
+      if (errorCount > 0) {
+        console.log(typography.warning(`Errors:         ${errorCount}`));
+      }
+      layout.spacer();
 
       // Save results to file if specified
       if (options.output) {
         const outputPath = path.resolve(options.output);
         fs.writeFileSync(outputPath, JSON.stringify(results, null, 2));
-        console.log(`\nResults saved to: ${outputPath}`);
+        console.log(typography.dim(`Results saved to: ${outputPath}`));
       } else {
         // Save to default location in .vulnzap
         const defaultOutputPath = path.join(vulnzapDir, 'batch-scan-results.json');
         fs.writeFileSync(defaultOutputPath, JSON.stringify(results, null, 2));
-        console.log(`\nResults saved to: ${defaultOutputPath}`);
+        console.log(typography.dim(`Results saved to: ${defaultOutputPath}`));
       }
 
       // Display detailed results
       if (vulnerableCount > 0) {
-        console.log('\nVulnerable Packages:');
-        console.log('-------------------');
+        layout.section();
+        console.log(typography.subheader('Vulnerable Packages'));
+
         results.results
           .filter(r => r.status === 'vulnerable')
           .forEach(result => {
-            console.log(`\n${result.package.packageName}@${result.package.version} (${result.package.ecosystem})`);
-            console.log(result.message);
+            layout.spacer();
+            console.log(typography.error(`${result.package.packageName}@${result.package.version}`));
+            console.log(typography.dim(`(${result.package.ecosystem})`));
+            console.log(typography.body(result.message));
 
             if (result.vulnerabilities) {
               result.vulnerabilities.forEach(vuln => {
-                console.log(`\n- ${vuln.title} (${vuln.severity})`);
-                console.log(`  ${vuln.description}`);
+                layout.spacer();
+                console.log(typography.accent(`• ${vuln.title}`));
+                console.log(typography.dim(`  Severity: ${vuln.severity}`));
+                console.log(typography.dim(`  ${vuln.description}`));
                 if (vuln.references?.length) {
-                  console.log(`  References: ${vuln.references.join(', ')}`);
+                  console.log(typography.dim(`  References: ${vuln.references.join(', ')}`));
                 }
               });
             }
@@ -921,23 +943,23 @@ program
   .description('Demo personalized CLI features (development only)')
   .option('--tier <tier>', 'User tier to demo (free, pro, enterprise)', 'free')
   .action(async (options) => {
-    displayBanner();
-    console.log(typography.title('Personalized CLI Demo'));
-    spacing.section();
+    layout.banner(version);
+    console.log(typography.header('Personalized CLI Demo'));
+    layout.section();
 
     // Create mock profile for demo
     const mockProfile = getMockProfile(options.tier as 'free' | 'pro' | 'enterprise');
 
     try {
-      console.log(typography.info(`Demonstrating ${options.tier} tier experience:`));
-      spacing.line();
+      console.log(typography.accent(`Demonstrating ${options.tier} tier experience:`));
+      layout.spacer();
 
       // Manually create the displays with mock data
       const firstName = mockProfile.username;
-      console.log(typography.subtitle(`Welcome back, ${firstName}`));
+      console.log(typography.subheader(`Welcome back, ${firstName}`));
 
       // Tier and usage display
-      const tierDisplay = mockProfile.subscription.tier === 'free' ? typography.muted('Free') :
+      const tierDisplay = mockProfile.subscription.tier === 'free' ? typography.dim('Free') :
         mockProfile.subscription.tier === 'pro' ? typography.accent('Pro') :
           typography.success('Enterprise');
 
@@ -950,38 +972,38 @@ program
       } else if (percentage >= 75) {
         usageDisplay = typography.warning(`${remaining} scans remaining this month`);
       } else {
-        usageDisplay = typography.muted(`${remaining} scans remaining this month`);
+        usageDisplay = typography.dim(`${remaining} scans remaining this month`);
       }
 
       console.log(`${tierDisplay} • ${usageDisplay}`);
 
       // FOMO message
       if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
-        spacing.line();
+        layout.spacer();
         if (percentage >= 90) {
           console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
         } else {
-          console.log(typography.muted('Consider upgrading to Pro to avoid hitting limits'));
+          console.log(typography.dim('Consider upgrading to Pro to avoid hitting limits'));
         }
       }
 
-      spacing.section();
-      console.log(typography.subtitle('Full Status View:'));
-      spacing.line();
+      layout.section();
+      console.log(typography.subheader('Full Status View:'));
+      layout.spacer();
 
-      console.log(typography.info('Account Information'));
-      spacing.line();
-      console.log(typography.muted(`  Name: ${mockProfile.username}`));
-      console.log(typography.muted(`  Email: ${mockProfile.email}`));
-      console.log(typography.muted(`  Tier: ${mockProfile.subscription.tier.charAt(0).toUpperCase() + mockProfile.subscription.tier.slice(1)}`));
+      console.log(typography.accent('Account Information'));
+      layout.spacer();
+      console.log(typography.dim(`  Name: ${mockProfile.username}`));
+      console.log(typography.dim(`  Email: ${mockProfile.email}`));
+      console.log(typography.dim(`  Tier: ${mockProfile.subscription.tier.charAt(0).toUpperCase() + mockProfile.subscription.tier.slice(1)}`));
 
-      spacing.line();
-      console.log(typography.info('Usage This Month'));
-      spacing.line();
+      layout.spacer();
+      console.log(typography.accent('Usage This Month'));
+      layout.spacer();
 
       const percentageRounded = Math.round(percentage);
-      console.log(typography.muted(`  Scans used: ${mockProfile.apiUsage} of ${mockProfile.subscription.line_scans_limit} (${percentageRounded}%)`));
-      console.log(typography.muted(`  Remaining: ${remaining} scans`));
+      console.log(typography.dim(`  Scans used: ${mockProfile.apiUsage} of ${mockProfile.subscription.line_scans_limit} (${percentageRounded}%)`));
+      console.log(typography.dim(`  Remaining: ${remaining} scans`));
 
       // Progress bar
       const barLength = 20;
@@ -994,16 +1016,16 @@ program
       else if (percentage >= 50) barColor = chalk.cyan;
       else barColor = chalk.green;
 
-      console.log(typography.muted(`  Progress: ${barColor(bar)} ${percentageRounded}%`));
+      console.log(typography.dim(`  Progress: ${barColor(bar)} ${percentageRounded}%`));
 
       if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
-        spacing.section();
+        layout.section();
         if (percentage >= 90) {
           console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
         } else {
-          console.log(typography.muted('Consider upgrading to Pro to avoid hitting limits'));
+          console.log(typography.dim('Consider upgrading to Pro to avoid hitting limits'));
         }
-        console.log(typography.muted('Visit vulnzap.com/pricing to upgrade'));
+        console.log(typography.dim('Visit vulnzap.com/pricing to upgrade'));
       }
 
     } catch (error: any) {
@@ -1035,10 +1057,10 @@ program
   .option('-o, --output <file>', 'Save scan results to a JSON file')
   .option('--key <key>', 'Use a specific API key')
   .action(async (repoUrl, options) => {
-    displayBanner();
-    console.log(typography.title('Repository Scan'));
-    console.log(typography.subtitle(`Scanning ${repoUrl}`));
-    spacing.line();
+    layout.banner(version);
+    console.log(typography.header('Setup Configuration'));
+    console.log(typography.subheader('Configure your development environment'));
+    layout.spacer();
 
     try {
       const spinner = createSpinner('Initiating repository scan...');
@@ -1052,15 +1074,15 @@ program
 
       spinner.succeed(typography.success('Scan initiated successfully'));
 
-      spacing.line();
-      console.log(typography.info('Scan Details:'));
-      console.log(typography.muted(`  Job ID: ${result.data.jobId}`));
-      console.log(typography.muted(`  Project ID: ${result.data.projectId}`));
-      console.log(typography.muted(`  Repository: ${result.data.repository}`));
-      console.log(typography.muted(`  Branch: ${result.data.branch}`));
-      console.log(typography.muted(`  Status: ${result.data.status}`));
-      console.log(typography.muted(`  Remaining line quota: ${result.data.remaining}`));
-      console.log(typography.muted(`  View Results at: https://vulnzap.com/dashboard/projects/${result.data.projectId}/${result.data.jobId}`));
+      layout.spacer();
+      console.log(typography.accent('Initializing VulnZap...'));
+      console.log(typography.dim(`  Job ID: ${result.data.jobId}`));
+      console.log(typography.dim(`  Project ID: ${result.data.projectId}`));
+      console.log(typography.dim(`  Repository: ${result.data.repository}`));
+      console.log(typography.dim(`  Branch: ${result.data.branch}`));
+      console.log(typography.dim(`  Status: ${result.data.status}`));
+      console.log(typography.dim(`  Remaining line quota: ${result.data.remaining}`));
+      console.log(typography.dim(`  View Results at: https://vulnzap.com/dashboard/projects/${result.data.projectId}/${result.data.jobId}`));
       // Save initial scan result to file if output option is provided
       if (options.output) {
         const scanResultData = {
@@ -1075,17 +1097,17 @@ program
 
         try {
           fs.writeFileSync(options.output, JSON.stringify(scanResultData, null, 2));
-          console.log(typography.muted(`  Results saved to: ${options.output}`));
+          console.log(typography.dim(`  Results saved to: ${options.output}`));
         } catch (error) {
           console.log(typography.warning(`  Failed to save results to file: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
       }
 
-      spacing.section();
+      layout.section();
 
       if (options.wait) {
-        console.log(typography.info('Waiting for scan completion...'));
-        console.log(typography.muted('Connecting to real-time event stream...'));
+        console.log(typography.accent('Waiting for scan completion...'));
+        console.log(typography.dim('Connecting to real-time event stream...'));
 
         let scanCompleted = false;
 
@@ -1098,30 +1120,30 @@ program
                 case 'connected':
                   console.log(typography.success('  🔗 Connected to scan progress stream'));
                   if (event.data.jobStatus) {
-                    console.log(typography.muted(`     Status: ${event.data.jobStatus}`));
+                    console.log(typography.dim(`     Status: ${event.data.jobStatus}`));
                   }
-                  spacing.line();
+                  layout.spacer();
                   break;
 
                 case 'progress':
                   if (event.data.message) {
                     // Handle different types of progress messages
                     const message = event.data.message;
-                    
+
                     if (message.includes('Scan started for')) {
-                      console.log(typography.info(`  📁 ${message}`));
+                      console.log(typography.accent(`  📁 ${message}`));
                     } else if (message.includes('Analyzing dependencies')) {
-                      console.log(typography.muted(`  🔍 ${message}`));
+                      console.log(typography.dim(`  🔍 ${message}`));
                     } else if (message.includes('Magic tree built')) {
-                      console.log(typography.muted(`  🌳 ${message}`));
+                      console.log(typography.dim(`  🌳 ${message}`));
                     } else if (message.includes('Generating comprehensive')) {
-                      console.log(typography.muted(`  📊 ${message}`));
+                      console.log(typography.dim(`  📊 ${message}`));
                     } else if (message.includes('Total lines scanned')) {
-                      console.log(typography.info(`  📈 ${message}`));
+                      console.log(typography.accent(`  📈 ${message}`));
                     } else if (message.includes('Scan completed for') && message.includes('vulnerabilities found')) {
-                      console.log(typography.success(`  📋 ${message}`));
+                      console.log(typography.subheader(`  📋 ${message}`));
                     } else {
-                      console.log(typography.muted(`  ℹ️  ${message}`));
+                      console.log(typography.dim(`  ℹ️  ${message}`));
                     }
                   }
                   break;
@@ -1129,26 +1151,26 @@ program
                 case 'vulnerability':
                   if (event.data) {
                     const vuln = event.data;
-                    const severityColor = vuln.severity === 'critical' ? typography.error : 
-                                        vuln.severity === 'high' ? typography.warning :
-                                        vuln.severity === 'medium' ? typography.info : typography.muted;
-                    
+                    const severityColor = vuln.severity === 'critical' ? typography.error :
+                      vuln.severity === 'high' ? typography.warning :
+                        vuln.severity === 'medium' ? typography.accent : typography.dim;
+
                     console.log(severityColor(`  🚨 ${vuln.severity}: ${vuln.title}`));
-                    console.log(typography.muted(`     File: ${vuln.file}`));
-                    console.log(typography.muted(`     Line: ${vuln.line}`));
-                    console.log(typography.muted(`     Description: ${vuln.description}`));
-                    spacing.line();
+                    console.log(typography.dim(`     File: ${vuln.file}`));
+                    console.log(typography.dim(`     Line: ${vuln.line}`));
+                    console.log(typography.dim(`     Description: ${vuln.description}`));
+                    layout.spacer();
                   }
                   break;
 
                 case 'completed':
                   console.log(typography.success('  ✅ Scan completed!'));
-                  console.log(typography.muted('  📥 Fetching detailed results...'));
-                  
+                  console.log(typography.dim('  📥 Fetching detailed results...'));
+
                   try {
                     // Fetch detailed results from jobs endpoint
                     const detailedResults = await getScanResults(result.data.jobId);
-                    
+
                     // Save detailed results to file if output option is provided
                     if (options.output) {
                       const finalResultData = {
@@ -1172,7 +1194,7 @@ program
                   } catch (error) {
                     console.log(typography.warning(`  ⚠️  Could not fetch detailed results: ${error instanceof Error ? error.message : 'Unknown error'}`));
                   }
-                  
+
                   scanCompleted = true;
                   // Exit immediately after completion
                   process.exit(0);
@@ -1181,7 +1203,7 @@ program
                 case 'failed':
                   console.log(typography.error('  ❌ Scan failed'));
                   if (event.data.message) {
-                    console.log(typography.muted(`     ${event.data.message}`));
+                    console.log(typography.dim(`     ${event.data.message}`));
                   }
                   scanCompleted = true;
                   // Exit with error code on failure
@@ -1191,7 +1213,7 @@ program
             },
             async (error) => {
               console.log(typography.warning(`  Event stream error: ${error.message}`));
-              console.log(typography.muted('  Falling back to polling...'));
+              console.log(typography.dim('  Falling back to polling...'));
 
               // Fallback to polling
               await fallbackToPolling(result.data.jobId);
@@ -1200,7 +1222,7 @@ program
           );
         } catch (error) {
           console.log(typography.warning(`  Could not connect to event stream: ${error instanceof Error ? error.message : 'Unknown error'}`));
-          console.log(typography.muted('  Falling back to polling...'));
+          console.log(typography.dim('  Falling back to polling...'));
 
           // Fallback to polling
           await fallbackToPolling(result.data.jobId);
@@ -1218,10 +1240,10 @@ program
 
           if (finalStatus.data.status === 'completed') {
             console.log(typography.success('Scan completed!'));
-            console.log(typography.muted('View detailed results at: https://vulnzap.com/dashboard/scans'));
+            console.log(typography.dim('View detailed results at: https://vulnzap.com/dashboard/scans'));
           } else if (finalStatus.data.status === 'failed') {
             console.log(typography.error('Scan failed'));
-            console.log(typography.muted(finalStatus.data.message || 'Unknown error occurred'));
+            console.log(typography.dim(finalStatus.data.message || 'Unknown error occurred'));
           }
 
           // Save final results to file if output option is provided
@@ -1239,7 +1261,7 @@ program
 
             try {
               fs.writeFileSync(options.output, JSON.stringify(finalResultData, null, 2));
-              console.log(typography.muted(`  Final results saved to: ${options.output}`));
+              console.log(typography.dim(`  Final results saved to: ${options.output}`));
             } catch (error) {
               console.log(typography.warning(`  Failed to save final results to file: ${error instanceof Error ? error.message : 'Unknown error'}`));
             }
@@ -1248,19 +1270,19 @@ program
           console.log(typography.warning(`  Could not get final status: ${error instanceof Error ? error.message : 'Unknown error'}`));
         }
       } else {
-        console.log(typography.info('Next Steps:'));
-        console.log(typography.muted('  • Monitor progress at https://vulnzap.com/dashboard/scans'));
-        console.log(typography.muted('  • Use --wait flag to wait for completion'));
-        console.log(typography.muted(`  • Job ID: ${result.data.jobId}`));
+        console.log(typography.accent('Next Steps:'));
+        console.log(typography.dim('  • Monitor progress at https://vulnzap.com/dashboard/scans'));
+        console.log(typography.dim('  • Use --wait flag to wait for completion'));
+        console.log(typography.dim(`  • Job ID: ${result.data.jobId}`));
       }
 
     } catch (error: any) {
       console.error(typography.error('Scan failed:'), error.message);
-      spacing.line();
-      console.log(typography.info('Troubleshooting:'));
-      console.log(typography.muted('  • Ensure the repository URL is correct (https://github.com/owner/repo)'));
-      console.log(typography.muted('  • Check your API key with: vulnzap status'));
-      console.log(typography.muted('  • Verify repository is public or you have access'));
+      layout.spacer();
+      console.log(typography.accent('Troubleshooting:'));
+      console.log(typography.dim('  • Ensure the repository URL is correct (https://github.com/owner/repo)'));
+      console.log(typography.dim('  • Check your API key with: vulnzap status'));
+      console.log(typography.dim('  • Verify repository is public or you have access'));
       process.exit(1);
     }
   });
@@ -1276,7 +1298,7 @@ async function fallbackToPolling(scanId: string): Promise<void> {
 
     try {
       const scanStatus = await getRepoScanStatus(scanId);
-      console.log(typography.muted(`  Status: ${scanStatus.data.status} (${attempts}/${maxAttempts})`));
+      console.log(typography.dim(`  Status: ${scanStatus.data.status} (${attempts}/${maxAttempts})`));
 
       if (scanStatus.data.status === 'completed' || scanStatus.data.status === 'failed') {
         if (scanStatus.data.status === 'completed') {
@@ -1284,7 +1306,7 @@ async function fallbackToPolling(scanId: string): Promise<void> {
         } else {
           console.log(typography.error('  ❌ Scan failed'));
           if (scanStatus.data.message) {
-            console.log(typography.muted(`     ${scanStatus.data.message}`));
+            console.log(typography.dim(`     ${scanStatus.data.message}`));
           }
         }
         return;
@@ -1295,7 +1317,7 @@ async function fallbackToPolling(scanId: string): Promise<void> {
   }
 
   console.log(typography.warning('  Scan is still processing...'));
-  console.log(typography.muted('  Check progress at: https://vulnzap.com/dashboard/scans'));
+  console.log(typography.dim('  Check progress at: https://vulnzap.com/dashboard/scans'));
 }
 
 // Command: vulnzap help
@@ -1303,36 +1325,40 @@ program
   .command('help')
   .description('Display help information')
   .action(() => {
-    displayBanner();
+    layout.banner(version);
 
-    console.log(chalk.cyan('Quick Start:'));
-    console.log('  npx vulnzap init          Complete onboarding (recommended for new users)');
-    console.log('');
-    console.log(chalk.cyan('Available Commands:'));
-    console.log('  init                      Complete VulnZap setup with authentication and IDE integration');
-    console.log('  setup                     Configure VulnZap with your API key');
-    console.log('  connect                   Connect VulnZap to your AI-powered IDE');
-    console.log('  check <package>           Check a package for vulnerabilities');
-    console.log('  batch-scan                Scan all packages in current directory');
-    console.log('  scan <repo>               Start repository vulnerability scan');
-    console.log('  mcp                       Start MCP server for IDE integration');
-    console.log('  status                    Check VulnZap server health');
-    console.log('  account                   View account information');
-    console.log('  help                      Display this help information');
-    console.log('');
-    console.log(chalk.cyan('Examples:'));
-    console.log('  vulnzap init                                    # Complete setup (recommended)');
-    console.log('  vulnzap check npm:express@4.17.1               # Check specific package');
-    console.log('  vulnzap setup -k your-api-key                  # Manual API key setup');
-    console.log('  vulnzap connect --ide cursor                   # Connect to Cursor IDE');
-    console.log('  vulnzap scan https://github.com/user/repo      # Scan a GitHub repository');
-    console.log('  vulnzap mcp                                    # Start MCP server for IDE integration');
-    console.log('');
-    console.log(chalk.cyan('Need Help?'));
-    console.log('  Documentation: https://vulnzap.com/docs');
-    console.log('  Support: https://vulnzap.com/support');
-    console.log('  Dashboard: https://vulnzap.com/dashboard');
-    console.log('');
+    console.log(typography.header('Quick Start'));
+    console.log(typography.body('  npx vulnzap init          Complete onboarding (recommended for new users)'));
+    layout.spacer();
+
+    console.log(typography.header('Available Commands'));
+    console.log(typography.accent('  init                      ') + typography.dim('Complete VulnZap setup with authentication and IDE integration'));
+    console.log(typography.accent('  setup                     ') + typography.dim('Configure VulnZap with your API key'));
+    console.log(typography.accent('  connect                   ') + typography.dim('Connect VulnZap to your AI-powered IDE'));
+    console.log(typography.accent('  check <package>           ') + typography.dim('Check a package for vulnerabilities'));
+    console.log(typography.accent('  batch-scan                ') + typography.dim('Scan all packages in current directory'));
+    console.log(typography.accent('  scan <repo>               ') + typography.dim('Start repository vulnerability scan'));
+    console.log(typography.accent('  mcp                       ') + typography.dim('Start MCP server for IDE integration'));
+    console.log(typography.accent('  tools                     ') + typography.dim('Interactive tour of VulnZap MCP tools'));
+    console.log(typography.accent('  status                    ') + typography.dim('Check VulnZap server health'));
+    console.log(typography.accent('  account                   ') + typography.dim('View account information'));
+    console.log(typography.accent('  help                      ') + typography.dim('Display this help information'));
+    layout.spacer();
+
+    console.log(typography.header('Examples'));
+    console.log(typography.body('  vulnzap init                                    # Complete setup (recommended)'));
+    console.log(typography.body('  vulnzap check npm:express@4.17.1               # Check specific package'));
+    console.log(typography.body('  vulnzap setup -k your-api-key                  # Manual API key setup'));
+    console.log(typography.body('  vulnzap connect --ide cursor                   # Connect to Cursor IDE'));
+    console.log(typography.body('  vulnzap scan https://github.com/user/repo      # Scan a GitHub repository'));
+    console.log(typography.body('  vulnzap mcp                                    # Start MCP server for IDE integration'));
+    layout.spacer();
+
+    console.log(typography.header('Need Help?'));
+    console.log(typography.dim('  Documentation: https://vulnzap.com/docs'));
+    console.log(typography.dim('  Support: https://vulnzap.com/support'));
+    console.log(typography.dim('  Dashboard: https://vulnzap.com/dashboard'));
+    layout.spacer();
 
     // Also show the default commander help for detailed options
     console.log(chalk.gray('Detailed command options:'));
@@ -1344,19 +1370,18 @@ program.parse(process.argv);
 
 // If no args, display help
 if (process.argv.length === 2) {
-  displayBanner();
-  console.log(typography.title('Get started with VulnZap'));
-  spacing.section();
-  console.log(typography.accent('  npx vulnzap init') + typography.muted('          Complete setup (recommended for new users)'));
-  console.log(typography.muted('  vulnzap help                Show all available commands'));
-  spacing.section();
+  layout.banner(version);
+  console.log(typography.header('Get started with VulnZap'));
+  layout.section();
+  console.log(typography.accent('  npx vulnzap init') + typography.dim('          Complete setup (recommended for new users)'));
+  console.log(typography.dim('  vulnzap help                Show all available commands'));
+  layout.section();
 }
 
 // Helper function to detect installed IDEs
 async function detectInstalledIDEs(): Promise<string[]> {
   const installedIDEs: string[] = [];
   const supportedIDEs = [
-    { name: 'vscode', command: 'code', displayName: 'VS Code' },
     { name: 'cursor', command: 'cursor', displayName: 'Cursor IDE' },
     { name: 'windsurf', command: 'windsurf', displayName: 'Windsurf IDE' }
   ];
@@ -1366,7 +1391,7 @@ async function detectInstalledIDEs(): Promise<string[]> {
       await execSync(`${ide.command} --version`, { stdio: 'pipe' });
       installedIDEs.push(ide.name);
     } catch (error) {
-      // Fallback detection for VS Code when CLI is not on PATH
+      // Fallback detection when CLI is not on PATH
       const resolved = resolveIDECLIPath(ide.name);
       if (resolved) {
         installedIDEs.push(ide.name);
@@ -1404,7 +1429,7 @@ function resolveVSCodeCLIPath(): string | null {
       if (fs.existsSync(p)) {
         return p;
       }
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -1439,7 +1464,7 @@ function resolveIDECLIPath(ide: string): string | null {
   for (const p of candidates) {
     try {
       if (fs.existsSync(p)) return p;
-    } catch {}
+    } catch { }
   }
   return null;
 }
@@ -1464,14 +1489,92 @@ function tryEnsureVSCodeSymlink(codePath: string): void {
           if (!fs.existsSync(target) && fs.existsSync(targetDir)) {
             fs.symlinkSync(codePath, target);
           }
-        } catch {}
+        } catch { }
       }
     }
-  } catch {}
+  } catch { }
+}
+
+// Helper to get MCP config path for a given IDE
+// Helper to get MCP config path for a given IDE
+// Returns primary path (workspace if in project, else global)
+function getMcpConfigPath(ide: string, options?: { workspace?: boolean }): string | null {
+  const homeDir = os.homedir();
+  const cwd = process.cwd();
+
+  if (ide === 'vscode') {
+    // Workspace-scoped (preferred for teams)
+    if (options?.workspace) {
+      return path.join(cwd, '.vscode', 'mcp.json');
+    }
+    // Global user settings - VS Code uses settings.json with "mcp" section
+    // We'll handle this separately in connectIDE
+    return null; // Signal to use settings.json approach
+  }
+
+  if (ide === 'cursor') {
+    // Project-scoped (if in workspace)
+    if (options?.workspace && fs.existsSync(path.join(cwd, '.cursor'))) {
+      return path.join(cwd, '.cursor', 'mcp.json');
+    }
+    // Global fallback
+    return path.join(homeDir, '.cursor', 'mcp.json');
+  }
+
+  if (ide === 'windsurf') {
+    return path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json');
+  }
+
+  if (ide === 'jetbrains') {
+    // Project-scoped - JetBrains uses mcp.json in project root
+    if (options?.workspace) {
+      return path.join(cwd, 'mcp.json');
+    }
+    // Fallback to .idea folder if it exists
+    if (fs.existsSync(path.join(cwd, '.idea'))) {
+      return path.join(cwd, '.idea', 'mcp.json');
+    }
+    return path.join(cwd, 'mcp.json');
+  }
+
+  if (ide === 'antigravity') {
+    return path.join(homeDir, '.gemini', 'antigravity', 'mcp_config.json');
+  }
+
+  if (ide === 'claude') {
+    const platform = os.platform();
+    if (platform === 'darwin') {
+      return path.join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
+    } else if (platform === 'win32') {
+      return path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
+    } else {
+      return path.join(homeDir, '.claude.json');
+    }
+  }
+
+  return null;
+}
+
+// Helper to check if VulnZap MCP is already installed
+function isMcpInstalled(ide: string): boolean {
+  const configPath = getMcpConfigPath(ide);
+  if (!configPath || !fs.existsSync(configPath)) {
+    return false;
+  }
+
+  try {
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    // Check both schemas: "servers" (VS Code/Cursor) and "mcpServers" (Windsurf/JetBrains)
+    return !!(config.mcpServers?.VulnZap || config.servers?.VulnZap);
+  } catch (e) {
+    return false;
+  }
 }
 
 // Helper function to handle IDE connection logic
 async function connectIDE(ide: string) {
+  const { mergeVulnZapConfig, readConfigFile, writeConfigFile } = await import('./utils/mcpConfig.js');
+
   // Log the event
   const logFile = join(os.homedir(), '.vulnzap', 'info.log');
   const logStream = fs.createWriteStream(logFile, { flags: 'a' });
@@ -1480,208 +1583,302 @@ async function connectIDE(ide: string) {
 
   const apiKey = await getKey();
 
+  // VS Code special handling - ask about workspace vs global
+  if (ide === 'vscode') {
+    layout.section();
+    console.log(typography.header('VS Code + GitHub Copilot MCP Configuration'));
+    layout.spacer();
+    console.log(typography.body('Choose where to install VulnZap MCP server:'));
+    layout.spacer();
+
+    const { scope } = await customPrompts.prompt([
+      {
+        type: 'list',
+        name: 'scope',
+        message: 'Installation scope:',
+        choices: [
+          {
+            name: 'Workspace (this project only) - Recommended for teams',
+            value: 'workspace'
+          },
+          {
+            name: 'Global (all VS Code projects) - Recommended for personal use',
+            value: 'global'
+          }
+        ],
+        default: 'workspace'
+      }
+    ]);
+
+    let configPath: string;
+    let configDescription: string;
+
+    if (scope === 'workspace') {
+      configPath = path.join(process.cwd(), '.vscode', 'mcp.json');
+      configDescription = 'Workspace-scoped (this project only)';
+
+      // Ensure .vscode directory exists
+      const workspaceDir = path.dirname(configPath);
+      if (!fs.existsSync(workspaceDir)) {
+        fs.mkdirSync(workspaceDir, { recursive: true });
+      }
+    } else {
+      // Global user settings - we'll use settings.json approach
+      const homeDir = os.homedir();
+      const platform = os.platform();
+
+      if (platform === 'darwin') {
+        configPath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json');
+      } else if (platform === 'win32') {
+        configPath = path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Code', 'User', 'settings.json');
+      } else {
+        configPath = path.join(homeDir, '.config', 'Code', 'User', 'settings.json');
+      }
+
+      configDescription = 'Global (all VS Code projects)';
+    }
+
+    // Read existing config
+    let config = readConfigFile(configPath);
+
+    // For global settings.json, we need to nest under "mcp" key
+    if (scope === 'global') {
+      if (!config) config = {};
+      if (!config.mcp) config.mcp = {};
+
+      // Merge into mcp.servers
+      if (!config.mcp.servers) config.mcp.servers = {};
+      config.mcp.servers.VulnZap = {
+        command: 'npx',
+        args: ['vulnzap', 'mcp'],
+        env: {
+          VULNZAP_API_KEY: '${env:VULNZAP_API_KEY}' // Use environment variable for security
+        }
+      };
+
+      // Inform user about environment variable
+      layout.spacer();
+      console.log(typography.accent('Important: Set environment variable'));
+      console.log(typography.dim('  Add to your shell profile (~/.zshrc or ~/.bashrc):'));
+      console.log(typography.code(`export VULNZAP_API_KEY="${apiKey}"`));
+      layout.spacer();
+    } else {
+      // Workspace: use standard merge
+      config = mergeVulnZapConfig(config, apiKey, ide);
+    }
+
+    // Write configuration
+    writeConfigFile(configPath, config);
+    console.log(typography.success('Configuration updated successfully'));
+
+    // Display helpful information
+    layout.section();
+    console.log(typography.accent('Configuration Summary'));
+    console.log(typography.dim('  MCP Server Name: VulnZap'));
+    console.log(typography.dim(`  Scope: ${configDescription}`));
+    console.log(typography.dim(`  Config Path: ${configPath}`));
+    console.log(typography.dim('  Schema: servers (GitHub Copilot MCP)'));
+    layout.section();
+    console.log(typography.accent('Next Steps:'));
+    console.log(typography.dim('  1. Restart VS Code'));
+    console.log(typography.dim('  2. Open GitHub Copilot Chat'));
+    console.log(typography.dim('  3. VulnZap security tools are now available'));
+    layout.section();
+    return;
+  }
+
+  // JetBrains special handling - ask about location
+  if (ide === 'jetbrains') {
+    layout.section();
+    console.log(typography.header('JetBrains + GitHub Copilot MCP Configuration'));
+    layout.spacer();
+    console.log(typography.body('Choose where to place the MCP configuration:'));
+    layout.spacer();
+
+    const hasIdeaFolder = fs.existsSync(path.join(process.cwd(), '.idea'));
+    const choices = [
+      {
+        name: 'Project root (mcp.json) - Recommended, visible to team',
+        value: 'root'
+      }
+    ];
+
+    if (hasIdeaFolder) {
+      choices.push({
+        name: '.idea folder (.idea/mcp.json) - Hidden from version control',
+        value: 'idea'
+      });
+    }
+
+    const { location } = await customPrompts.prompt([
+      {
+        type: 'list',
+        name: 'location',
+        message: 'Configuration location:',
+        choices,
+        default: 'root'
+      }
+    ]);
+
+    let configPath: string;
+    let configDescription: string;
+
+    if (location === 'idea') {
+      configPath = path.join(process.cwd(), '.idea', 'mcp.json');
+      configDescription = 'Project .idea folder (hidden from VCS)';
+    } else {
+      configPath = path.join(process.cwd(), 'mcp.json');
+      configDescription = 'Project root (visible to team)';
+    }
+
+    // Read existing config
+    let config = readConfigFile(configPath);
+
+    // Merge VulnZap configuration (uses "mcpServers" schema)
+    config = mergeVulnZapConfig(config, apiKey, ide);
+
+    // Write configuration
+    writeConfigFile(configPath, config);
+    console.log(typography.success('Configuration updated successfully'));
+
+    // Display helpful information
+    layout.section();
+    console.log(typography.accent('Configuration Summary'));
+    console.log(typography.dim('  MCP Server Name: VulnZap'));
+    console.log(typography.dim(`  Location: ${configDescription}`));
+    console.log(typography.dim(`  Config Path: ${configPath}`));
+    console.log(typography.dim('  Schema: mcpServers (GitHub Copilot Agent)'));
+    layout.section();
+    console.log(typography.accent('Next Steps:'));
+    console.log(typography.dim('  1. Open Copilot Chat in JetBrains'));
+    console.log(typography.dim('  2. Switch to Agent mode'));
+    console.log(typography.dim('  3. Click MCP tools icon to verify VulnZap appears'));
+    console.log(typography.dim('  4. Enable VulnZap from the MCP server list'));
+    layout.section();
+    console.log(typography.dim('Note: Org admins must enable "MCP servers in Copilot" for Copilot Business/Enterprise'));
+    layout.section();
+    return;
+  }
+
+  // Cursor special handling - ask about workspace vs global
   if (ide === 'cursor') {
-    // Ensure the .cursor directory exists
-    const cursorDir = path.join(os.homedir(), '.cursor');
-    if (!fs.existsSync(cursorDir)) {
-      fs.mkdirSync(cursorDir, { recursive: true });
-      console.log(chalk.yellow('Created .cursor directory'));
-    }
+    layout.section();
+    console.log(typography.header('Cursor + GitHub Copilot MCP Configuration'));
+    layout.spacer();
+    console.log(typography.body('Choose where to install VulnZap MCP server:'));
+    layout.spacer();
 
-    // Define the MCP config file path
-    const cursorMcpConfigLocation = path.join(cursorDir, 'mcp.json');
+    const { scope } = await customPrompts.prompt([
+      {
+        type: 'list',
+        name: 'scope',
+        message: 'Installation scope:',
+        choices: [
+          {
+            name: 'Workspace (this project only) - Recommended for teams',
+            value: 'workspace'
+          },
+          {
+            name: 'Global (all Cursor projects) - Recommended for personal use',
+            value: 'global'
+          }
+        ],
+        default: 'global'
+      }
+    ]);
 
-    // Read existing config or create empty object
-    let cursorMcpConfig: { mcpServers?: any;[key: string]: any } = {};
-    if (fs.existsSync(cursorMcpConfigLocation)) {
-      try {
-        const configData = fs.readFileSync(cursorMcpConfigLocation, 'utf8');
-        cursorMcpConfig = JSON.parse(configData);
-      } catch (parseError) {
-        console.log(typography.warning('Warning: Could not parse existing mcp.json, creating new one'));
-        cursorMcpConfig = {};
+    let configPath: string;
+    let configDescription: string;
+
+    if (scope === 'workspace') {
+      configPath = path.join(process.cwd(), '.cursor', 'mcp.json');
+      configDescription = 'Workspace-scoped (this project only)';
+
+      // Ensure .cursor directory exists
+      const workspaceDir = path.dirname(configPath);
+      if (!fs.existsSync(workspaceDir)) {
+        fs.mkdirSync(workspaceDir, { recursive: true });
       }
     } else {
-      console.log(typography.info('Creating new mcp.json file'));
+      configPath = path.join(os.homedir(), '.cursor', 'mcp.json');
+      configDescription = 'Global (all Cursor projects)';
     }
 
-    // Initialize mcpServers if it doesn't exist
-    if (!cursorMcpConfig.mcpServers) {
-      cursorMcpConfig.mcpServers = {};
-    }
+    // Read existing config
+    let config = readConfigFile(configPath);
 
+    // Merge VulnZap configuration (uses "servers" schema)
+    config = mergeVulnZapConfig(config, apiKey, ide);
 
-    // Add VulnZap configuration
-    cursorMcpConfig.mcpServers.VulnZap = {
-      command: "npx",
-      args: ["vulnzap", "mcp"],
-      env: {
-        "VULNZAP_API_KEY": apiKey
-      }
-    };
-
-    // Write the config file with proper permissions
-    const configContent = JSON.stringify(cursorMcpConfig, null, 2);
-    fs.writeFileSync(cursorMcpConfigLocation, configContent, {
-      encoding: 'utf8'
-    });
-
+    // Write configuration
+    writeConfigFile(configPath, config);
     console.log(typography.success('Configuration updated successfully'));
 
     // Display helpful information
-    spacing.section();
-    console.log(typography.info('Configuration Summary'));
-    console.log(typography.muted('  MCP Server Name: VulnZap'));
-    console.log(typography.muted('  Transport Type: STDIO'));
-    console.log(typography.muted('  Auto-approved Tools: auto-vulnerability-scan, scan_repo'));
-    console.log(typography.muted('  Network Timeout: 60 seconds'));
-    spacing.section();
-    console.log(typography.info('To manage this server in Cursor:'));
-    console.log(typography.muted('  1. Click the "MCP Servers" icon in Cursor'));
-    console.log(typography.muted('  2. Find "VulnZap" in the server list'));
-    console.log(typography.muted('  3. Use the toggle switch to enable/disable'));
-    console.log(typography.muted('  4. Click on server name to access additional settings'));
-
-  } else if (ide === 'windsurf') {
-    // Windsurf MCP config location and structure
-    const windsurfDir = path.join(os.homedir(), '.codeium', 'windsurf');
-    const windsurfMcpConfigLocation = path.join(windsurfDir, 'mcp_config.json');
-    // Ensure parent directory exists
-    if (!fs.existsSync(windsurfDir)) {
-      fs.mkdirSync(windsurfDir, { recursive: true });
-    }
-    let windsurfMcpConfig: any = {};
-    if (fs.existsSync(windsurfMcpConfigLocation)) {
-      try {
-        windsurfMcpConfig = JSON.parse(fs.readFileSync(windsurfMcpConfigLocation, 'utf8'));
-      } catch (e) {
-        console.error(typography.error('Failed to parse existing Windsurf MCP config.'));
-        return;
-      }
-    } else {
-      // If file does not exist, create with empty structure
-      windsurfMcpConfig = { mcpServers: {} };
-    }
-    if (!windsurfMcpConfig.mcpServers) {
-      windsurfMcpConfig.mcpServers = {};
-    }
-    windsurfMcpConfig.mcpServers.VulnZap = {
-      command: "npx",
-      args: ["vulnzap", "mcp"],
-      env: {
-        "VULNZAP_API_KEY": apiKey
-      }
-    };
-    fs.writeFileSync(windsurfMcpConfigLocation, JSON.stringify(windsurfMcpConfig, null, 2));
-    console.log(typography.success('Configuration updated successfully'));
-
-    // Display helpful information
-    spacing.section();
-    console.log(typography.info('Configuration Summary'));
-    console.log(typography.muted('  MCP Server Name: VulnZap'));
-    console.log(typography.muted('  Transport Type: STDIO'));
-    console.log(typography.muted('  Auto-approved Tools: auto-vulnerability-scan'));
-    console.log(typography.muted('  Network Timeout: 60 seconds'));
-    spacing.section();
-    console.log(typography.info('To manage this server in Windsurf:'));
-    console.log(typography.muted('  1. Click the "MCP Servers" icon in Windsurf'));
-    console.log(typography.muted('  2. Find "VulnZap" in the server list'));
-    console.log(typography.muted('  3. Use the toggle switch to enable/disable'));
-    console.log(typography.muted('  4. Click on server name to access additional settings'));
-
-  } else if (ide === 'cline') {
-    // Cline MCP config location and structure
-    const clineDir = path.join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'saoudrizwan.claude-dev', 'settings');
-    const clineMcpConfigLocation = path.join(clineDir, 'cline_mcp_settings.json');
-
-    // Ensure parent directory exists
-    if (!fs.existsSync(clineDir)) {
-      fs.mkdirSync(clineDir, { recursive: true });
-    }
-
-    let clineMcpConfig: any = {};
-    if (fs.existsSync(clineMcpConfigLocation)) {
-      try {
-        clineMcpConfig = JSON.parse(fs.readFileSync(clineMcpConfigLocation, 'utf8'));
-      } catch (e) {
-        console.error(typography.error('Failed to parse existing Cline MCP config.'));
-        return;
-      }
-    }
-
-    // Initialize mcpServers if it doesn't exist
-    if (!clineMcpConfig.mcpServers) {
-      clineMcpConfig.mcpServers = {};
-    }
-
-    // Configure VulnZap MCP server with STDIO transport
-    clineMcpConfig.mcpServers.VulnZap = {
-      command: "npx",
-      args: ["vulnzap", "mcp"],
-      env: {
-        "VULNZAP_API_KEY": apiKey
-      },
-      alwaysAllow: ["auto-vulnerability-scan"],
-      disabled: false,
-      networkTimeout: 60000
-    };
-
-    fs.writeFileSync(clineMcpConfigLocation, JSON.stringify(clineMcpConfig, null, 2));
-    console.log(typography.success('Configuration updated successfully'));
-
-    // Display helpful information
-    spacing.section();
-    console.log(typography.info('Configuration Summary'));
-    console.log(typography.muted('  MCP Server Name: VulnZap'));
-    console.log(typography.muted('  Transport Type: STDIO'));
-    console.log(typography.muted('  Auto-approved Tools: auto-vulnerability-scan'));
-    console.log(typography.muted('  Network Timeout: 60 seconds'));
-    spacing.section();
-    console.log(typography.info('To manage this server in Cline:'));
-    console.log(typography.muted('  1. Click the "MCP Servers" icon in Cline'));
-    console.log(typography.muted('  2. Find "VulnZap" in the server list'));
-    console.log(typography.muted('  3. Use the toggle switch to enable/disable'));
-    console.log(typography.muted('  4. Click on server name to access additional settings'));
-
-  } else if (ide === 'vscode') {
-    // For VSCode, we don't need MCP setup, just provide manual configuration instructions
-    console.log(typography.info('Manual Configuration for VS Code'));
-    spacing.line();
-    console.log(typography.muted('VS Code integration is handled via the VulnZap extension.'));
-    console.log(typography.muted('If you haven\'t installed it yet, you can:'));
-    console.log(typography.muted('  1. Open VS Code'));
-    console.log(typography.muted('  2. Go to Extensions (Ctrl+Shift+X)'));
-    console.log(typography.muted('  3. Search for "VulnZap"'));
-    console.log(typography.muted('  4. Install the extension'));
-    spacing.line();
-    console.log(typography.muted('The extension will automatically use your API key for scanning.'));
-    spacing.section();
-    // Experience messaging (concise, Apple-like tone)
-    console.log(typography.subtitle('Experience'));
-    console.log(typography.muted('  • Full experience: Cursor & Windsurf (with MCP server)'));
-    console.log(typography.muted('  • VS Code: Dev-focused inline & repo scans — no agent control'));
-    spacing.line();
-    console.log(typography.accent('For the best experience, use Cursor or Windsurf for now'));
-    spacing.line();
-    console.log(typography.muted('Coming soon: Cline, Roo Code, Kilo Code, Augment Code support'));
-
-  } else {
-    console.log(typography.info('Manual Configuration Required'));
-    spacing.line();
-    console.log(typography.muted('Add this to your IDE\'s MCP configuration:'));
-    spacing.line();
-    console.log(typography.code(`{
-  "mcpServers": {
-    "VulnZap": {
-      "command": "npx",
-      "args": ["vulnzap", "mcp"],
-      "env": {
-        "VULNZAP_API_KEY": "${apiKey}"
-      }
-    }
+    layout.section();
+    console.log(typography.accent('Configuration Summary'));
+    console.log(typography.dim('  MCP Server Name: VulnZap'));
+    console.log(typography.dim(`  Scope: ${configDescription}`));
+    console.log(typography.dim(`  Config Path: ${configPath}`));
+    console.log(typography.dim('  Schema: servers (GitHub Copilot MCP)'));
+    console.log(typography.dim('  Transport Type: STDIO'));
+    console.log(typography.dim('  Auto-approved Tools: auto-vulnerability-scan, scan_repo'));
+    layout.section();
+    console.log(typography.accent('To manage this server in Cursor:'));
+    console.log(typography.dim('  1. Click the "MCP Servers" icon in Cursor'));
+    console.log(typography.dim('  2. Find "VulnZap" in the server list'));
+    console.log(typography.dim('  3. Use the toggle switch to enable/disable'));
+    console.log(typography.dim('  4. Works with GitHub Copilot in Cursor'));
+    layout.section();
+    return;
   }
-}`));
-    spacing.line();
-    console.log(typography.muted('Visit https://vulnzap.com/docs/ide-integration for more information'));
+
+  // Standard handling for Windsurf, Antigravity, Claude
+  const configPath = getMcpConfigPath(ide);
+
+  if (!configPath) {
+    console.log(typography.error(`Could not determine configuration path for ${ide}`));
+    return;
   }
-} 
+
+  // Read existing config
+  let config = readConfigFile(configPath);
+
+  // Merge VulnZap configuration
+  config = mergeVulnZapConfig(config, apiKey, ide);
+
+  // Write configuration
+  writeConfigFile(configPath, config);
+  console.log(typography.success('Configuration updated successfully'));
+
+  // Display helpful information
+  layout.section();
+  console.log(typography.accent('Configuration Summary'));
+  console.log(typography.dim('  MCP Server Name: VulnZap'));
+  console.log(typography.dim(`  Config Path: ${configPath}`));
+
+  const schemaKey = 'mcpServers';
+  console.log(typography.dim(`  Schema: ${schemaKey}`));
+
+  if (ide === 'windsurf') {
+    layout.section();
+    console.log(typography.accent('To manage this server in Windsurf:'));
+    console.log(typography.dim('  1. Click the "MCP Servers" icon in Windsurf'));
+    console.log(typography.dim('  2. Find "VulnZap" in the server list'));
+    console.log(typography.dim('  3. Use the toggle switch to enable/disable'));
+    console.log(typography.dim('  4. Works with GitHub Copilot in Windsurf'));
+  } else if (ide === 'claude') {
+    layout.section();
+    console.log(typography.accent('Next Steps:'));
+    console.log(typography.dim('  1. Restart Claude Code Desktop'));
+    console.log(typography.dim('  2. Type /mcp in chat or check Settings > Integrations > MCP Servers'));
+    console.log(typography.dim('  3. Verify VulnZap appears in the MCP server list'));
+  } else if (ide === 'antigravity') {
+    layout.section();
+    console.log(typography.accent('Next Steps:'));
+    console.log(typography.dim('  1. Restart Antigravity'));
+    console.log(typography.dim('  2. VulnZap tools are now available'));
+  }
+
+  layout.section();
+}
