@@ -48,7 +48,7 @@ export function createMCPServerConfig(apiKey: string): MCPServerConfig {
  * Get the appropriate JSON schema key for an IDE
  */
 export function getSchemaKey(ide: string): 'servers' | 'mcpServers' {
-    const usesServersKey = ['vscode', 'cursor'];
+    const usesServersKey = ['vscode'];
     return usesServersKey.includes(ide) ? 'servers' : 'mcpServers';
 }
 

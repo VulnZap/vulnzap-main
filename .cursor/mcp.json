@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "VulnZap": {
+      "command": "npx",
+      "args": [
+        "vulnzap",
+        "mcp"
+      ],
+      "env": {
+        "VULNZAP_API_KEY": "vz_XjPjwwesbQqNFx6Q4HaEMhHUCTYQsyuU"
+      }
+    }
+  }
+}
