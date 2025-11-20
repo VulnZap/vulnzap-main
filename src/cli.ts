@@ -197,12 +197,12 @@ program
                 message: 'What would you like to configure?',
                 choices: [
                   {
-                    name: 'GitHub Copilot MCP (works with VS Code, Cursor, Windsurf, JetBrains)',
-                    value: 'copilot'
+                    name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
+                    value: 'standalone'
                   },
                   {
-                    name: 'Standalone IDE (Antigravity, Claude Code)',
-                    value: 'standalone'
+                    name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
+                    value: 'copilot'
                   },
                   {
                     name: 'Skip for now',
@@ -214,6 +214,46 @@ program
 
             if (ideCategory === 'skip') {
               selectedIDEs = [];
+            } else if (ideCategory === 'standalone') {
+              // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
+              const standaloneIDEs = installedIDEs.filter(ide =>
+                ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
+              );
+
+              if (standaloneIDEs.length === 0) {
+                console.log(typography.warning('No standalone IDEs detected'));
+                console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
+                selectedIDEs = [];
+              } else {
+                const standaloneChoices = standaloneIDEs.map(ide => {
+                  const isInstalled = isMcpInstalled(ide);
+                  const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
+
+                  let name = '';
+                  if (ide === 'cursor') name = 'Cursor IDE';
+                  else if (ide === 'windsurf') name = 'Windsurf IDE';
+                  else if (ide === 'antigravity') name = 'Antigravity';
+                  else if (ide === 'claude') name = 'Claude Code';
+                  else name = ide;
+
+                  return {
+                    name: `${name}${installedTag}`,
+                    value: ide,
+                    checked: !isInstalled
+                  };
+                });
+
+                const { chosenIDEs } = await customPrompts.prompt([
+                  {
+                    type: 'checkbox',
+                    name: 'chosenIDEs',
+                    message: 'Which standalone IDEs would you like to configure?',
+                    choices: standaloneChoices
+                  }
+                ]);
+
+                selectedIDEs = chosenIDEs;
+              }
             } else if (ideCategory === 'copilot') {
               // Filter for Copilot-compatible IDEs
               const copilotIDEs = installedIDEs.filter(ide =>
@@ -254,38 +294,6 @@ program
 
                 selectedIDEs = chosenIDEs;
               }
-            } else if (ideCategory === 'standalone') {
-              // Filter for standalone IDEs
-              const standaloneIDEs = installedIDEs.filter(ide =>
-                ['antigravity', 'claude'].includes(ide)
-              );
-
-              const standaloneChoices = standaloneIDEs.map(ide => {
-                const isInstalled = isMcpInstalled(ide);
-                const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-                let name = '';
-                if (ide === 'antigravity') name = 'Antigravity';
-                else if (ide === 'claude') name = 'Claude Code';
-                else name = ide;
-
-                return {
-                  name: `${name}${installedTag}`,
-                  value: ide,
-                  checked: !isInstalled
-                };
-              });
-
-              const { chosenIDEs } = await customPrompts.prompt([
-                {
-                  type: 'checkbox',
-                  name: 'chosenIDEs',
-                  message: 'Which standalone IDEs would you like to configure?',
-                  choices: standaloneChoices
-                }
-              ]);
-
-              selectedIDEs = chosenIDEs;
             }
           }
         }
@@ -440,12 +448,12 @@ program
             message: 'What would you like to configure?',
             choices: [
               {
-                name: 'GitHub Copilot MCP (works with VS Code, Cursor, Windsurf, JetBrains)',
-                value: 'copilot'
+                name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
+                value: 'standalone'
               },
               {
-                name: 'Standalone IDE (Antigravity, Claude Code)',
-                value: 'standalone'
+                name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
+                value: 'copilot'
               },
               {
                 name: 'Skip for now',
@@ -457,6 +465,45 @@ program
 
         if (ideCategory === 'skip') {
           console.log(typography.dim('You can set this up later with: vulnzap connect'));
+        } else if (ideCategory === 'standalone') {
+          // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
+          const standaloneIDEs = installedIDEs.filter(ide =>
+            ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
+          );
+
+          if (standaloneIDEs.length === 0) {
+            console.log(typography.warning('No standalone IDEs detected'));
+            console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
+          } else {
+            const standaloneChoices = standaloneIDEs.map(ide => {
+              const isInstalled = isMcpInstalled(ide);
+              const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
+
+              let name = '';
+              if (ide === 'cursor') name = 'Cursor IDE';
+              else if (ide === 'windsurf') name = 'Windsurf IDE';
+              else if (ide === 'antigravity') name = 'Antigravity';
+              else if (ide === 'claude') name = 'Claude Code';
+              else name = ide;
+
+              return {
+                name: `${name}${installedTag}`,
+                value: ide,
+                checked: !isInstalled
+              };
+            });
+
+            const { selectedStandaloneIDEs } = await customPrompts.prompt([
+              {
+                type: 'checkbox',
+                name: 'selectedStandaloneIDEs',
+                message: 'Which standalone IDEs would you like to configure?',
+                choices: standaloneChoices
+              }
+            ]);
+
+            selectedIDEs = selectedStandaloneIDEs;
+          }
         } else if (ideCategory === 'copilot') {
           // Filter for Copilot-compatible IDEs
           const copilotIDEs = installedIDEs.filter(ide =>
@@ -496,38 +543,6 @@ program
 
             selectedIDEs = selectedCopilotIDEs;
           }
-        } else if (ideCategory === 'standalone') {
-          // Filter for standalone IDEs
-          const standaloneIDEs = installedIDEs.filter(ide =>
-            ['antigravity', 'claude'].includes(ide)
-          );
-
-          const standaloneChoices = standaloneIDEs.map(ide => {
-            const isInstalled = isMcpInstalled(ide);
-            const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-            let name = '';
-            if (ide === 'antigravity') name = 'Antigravity';
-            else if (ide === 'claude') name = 'Claude Code';
-            else name = ide;
-
-            return {
-              name: `${name}${installedTag}`,
-              value: ide,
-              checked: !isInstalled
-            };
-          });
-
-          const { selectedStandaloneIDEs } = await customPrompts.prompt([
-            {
-              type: 'checkbox',
-              name: 'selectedStandaloneIDEs',
-              message: 'Which standalone IDEs would you like to configure?',
-              choices: standaloneChoices
-            }
-          ]);
-
-          selectedIDEs = selectedStandaloneIDEs;
         }
 
         if (selectedIDEs.length > 0) {
