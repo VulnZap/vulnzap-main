@@ -185,42 +185,117 @@ program
 
           if (installedIDEs.length === 0) {
             console.log(typography.warning('No supported IDEs detected on your system'));
-            console.log(typography.dim('Supported IDEs: VS Code, Cursor, Windsurf, JetBrains, Antigravity, Claude Code'));
-            console.log(typography.dim('You can still configure them manually later'));
+            console.log(typography.dim('Supported: GitHub Copilot (VS Code, Cursor, Windsurf, JetBrains), Antigravity, Claude Code'));
+            console.log(typography.dim('You can configure them manually with: vulnzap connect'));
             selectedIDEs = [];
-          }
+          } else {
+            // Step 1: Ask what category they want to configure
+            const { ideCategory } = await customPrompts.prompt([
+              {
+                type: 'list',
+                name: 'ideCategory',
+                message: 'What would you like to configure?',
+                choices: [
+                  {
+                    name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
+                    value: 'standalone'
+                  },
+                  {
+                    name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
+                    value: 'copilot'
+                  },
+                  {
+                    name: 'Skip for now',
+                    value: 'skip'
+                  }
+                ]
+              }
+            ]);
 
-          // Create choices for multiselect with installed status
-          const ideChoices = installedIDEs.map(ide => {
-            const isInstalled = isMcpInstalled(ide);
-            const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
+            if (ideCategory === 'skip') {
+              selectedIDEs = [];
+            } else if (ideCategory === 'standalone') {
+              // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
+              const standaloneIDEs = installedIDEs.filter(ide =>
+                ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
+              );
 
-            let name = '';
-            if (ide === 'vscode') name = 'VS Code + GitHub Copilot';
-            else if (ide === 'cursor') name = 'Cursor IDE + GitHub Copilot';
-            else if (ide === 'windsurf') name = 'Windsurf + GitHub Copilot';
-            else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc) + Copilot';
-            else if (ide === 'antigravity') name = 'Antigravity';
-            else if (ide === 'claude') name = 'Claude Code';
-            else name = ide;
+              if (standaloneIDEs.length === 0) {
+                console.log(typography.warning('No standalone IDEs detected'));
+                console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
+                selectedIDEs = [];
+              } else {
+                const standaloneChoices = standaloneIDEs.map(ide => {
+                  const isInstalled = isMcpInstalled(ide);
+                  const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
 
-            return {
-              name: `${name}${installedTag}`,
-              value: ide,
-              checked: !isInstalled // Default to unchecked if already installed
-            };
-          });
+                  let name = '';
+                  if (ide === 'cursor') name = 'Cursor IDE';
+                  else if (ide === 'windsurf') name = 'Windsurf IDE';
+                  else if (ide === 'antigravity') name = 'Antigravity';
+                  else if (ide === 'claude') name = 'Claude Code';
+                  else name = ide;
 
-          const { chosenIDEs } = await customPrompts.prompt([
-            {
-              type: 'checkbox',
-              name: 'chosenIDEs',
-              message: 'Which development environments would you like to configure?',
-              choices: ideChoices,
-              default: installedIDEs
+                  return {
+                    name: `${name}${installedTag}`,
+                    value: ide,
+                    checked: !isInstalled
+                  };
+                });
+
+                const { chosenIDEs } = await customPrompts.prompt([
+                  {
+                    type: 'checkbox',
+                    name: 'chosenIDEs',
+                    message: 'Which standalone IDEs would you like to configure?',
+                    choices: standaloneChoices
+                  }
+                ]);
+
+                selectedIDEs = chosenIDEs;
+              }
+            } else if (ideCategory === 'copilot') {
+              // Filter for Copilot-compatible IDEs
+              const copilotIDEs = installedIDEs.filter(ide =>
+                ['vscode', 'cursor', 'windsurf', 'jetbrains'].includes(ide)
+              );
+
+              if (copilotIDEs.length === 0) {
+                console.log(typography.warning('No GitHub Copilot-compatible IDEs detected'));
+                console.log(typography.dim('Install VS Code, Cursor, Windsurf, or a JetBrains IDE to continue'));
+                selectedIDEs = [];
+              } else {
+                const copilotChoices = copilotIDEs.map(ide => {
+                  const isInstalled = isMcpInstalled(ide);
+                  const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
+
+                  let name = '';
+                  if (ide === 'vscode') name = 'VS Code';
+                  else if (ide === 'cursor') name = 'Cursor';
+                  else if (ide === 'windsurf') name = 'Windsurf';
+                  else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc)';
+                  else name = ide;
+
+                  return {
+                    name: `${name}${installedTag}`,
+                    value: ide,
+                    checked: !isInstalled
+                  };
+                });
+
+                const { chosenIDEs } = await customPrompts.prompt([
+                  {
+                    type: 'checkbox',
+                    name: 'chosenIDEs',
+                    message: 'Which IDEs do you use with GitHub Copilot?',
+                    choices: copilotChoices
+                  }
+                ]);
+
+                selectedIDEs = chosenIDEs;
+              }
             }
-          ]);
-          selectedIDEs = chosenIDEs;
+          }
         }
       }
 
@@ -358,41 +433,117 @@ program
       const installedIDEs = await detectInstalledIDEs();
       ideSpinner.stop();
 
+      let selectedIDEs: string[] = [];
+
       if (installedIDEs.length === 0) {
         console.log(typography.warning('No supported IDEs detected on your system'));
-        console.log(typography.dim('Supported IDEs: VS Code, Cursor, Windsurf, JetBrains, Antigravity, Claude Code'));
-        console.log(typography.dim('You can still configure them manually later'));
+        console.log(typography.dim('Supported: GitHub Copilot (VS Code, Cursor, Windsurf, JetBrains), Antigravity, Claude Code'));
+        console.log(typography.dim('You can configure them manually later with: vulnzap connect'));
       } else {
-        // Create choices for multiselect with installed status
-        const ideChoices = installedIDEs.map(ide => {
-          const isInstalled = isMcpInstalled(ide);
-          const installedTag = isInstalled ? chalk.green(' (Installed)') : '';
-
-          let name = '';
-          if (ide === 'vscode') name = 'VS Code + GitHub Copilot';
-          else if (ide === 'cursor') name = 'Cursor IDE + GitHub Copilot';
-          else if (ide === 'windsurf') name = 'Windsurf + GitHub Copilot';
-          else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc) + Copilot';
-          else if (ide === 'antigravity') name = 'Antigravity';
-          else if (ide === 'claude') name = 'Claude Code';
-          else name = ide;
-
-          return {
-            name: `${name}${installedTag}`,
-            value: ide,
-            checked: !isInstalled // Default to unchecked if already installed
-          };
-        });
-
-        const { selectedIDEs } = await customPrompts.prompt([
+        // Step 1: Ask what category they want to configure
+        const { ideCategory } = await customPrompts.prompt([
           {
-            type: 'checkbox',
-            name: 'selectedIDEs',
-            message: 'Which development environments would you like to configure?',
-            choices: ideChoices,
-            default: installedIDEs
+            type: 'list',
+            name: 'ideCategory',
+            message: 'What would you like to configure?',
+            choices: [
+              {
+                name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
+                value: 'standalone'
+              },
+              {
+                name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
+                value: 'copilot'
+              },
+              {
+                name: 'Skip for now',
+                value: 'skip'
+              }
+            ]
           }
         ]);
+
+        if (ideCategory === 'skip') {
+          console.log(typography.dim('You can set this up later with: vulnzap connect'));
+        } else if (ideCategory === 'standalone') {
+          // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
+          const standaloneIDEs = installedIDEs.filter(ide =>
+            ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
+          );
+
+          if (standaloneIDEs.length === 0) {
+            console.log(typography.warning('No standalone IDEs detected'));
+            console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
+          } else {
+            const standaloneChoices = standaloneIDEs.map(ide => {
+              const isInstalled = isMcpInstalled(ide);
+              const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
+
+              let name = '';
+              if (ide === 'cursor') name = 'Cursor IDE';
+              else if (ide === 'windsurf') name = 'Windsurf IDE';
+              else if (ide === 'antigravity') name = 'Antigravity';
+              else if (ide === 'claude') name = 'Claude Code';
+              else name = ide;
+
+              return {
+                name: `${name}${installedTag}`,
+                value: ide,
+                checked: !isInstalled
+              };
+            });
+
+            const { selectedStandaloneIDEs } = await customPrompts.prompt([
+              {
+                type: 'checkbox',
+                name: 'selectedStandaloneIDEs',
+                message: 'Which standalone IDEs would you like to configure?',
+                choices: standaloneChoices
+              }
+            ]);
+
+            selectedIDEs = selectedStandaloneIDEs;
+          }
+        } else if (ideCategory === 'copilot') {
+          // Filter for Copilot-compatible IDEs
+          const copilotIDEs = installedIDEs.filter(ide =>
+            ['vscode', 'cursor', 'windsurf', 'jetbrains'].includes(ide)
+          );
+
+          if (copilotIDEs.length === 0) {
+            console.log(typography.warning('No GitHub Copilot-compatible IDEs detected'));
+            console.log(typography.dim('Install VS Code, Cursor, Windsurf, or a JetBrains IDE to continue'));
+          } else {
+            const copilotChoices = copilotIDEs.map(ide => {
+              const isInstalled = isMcpInstalled(ide);
+              const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
+
+              let name = '';
+              if (ide === 'vscode') name = 'VS Code';
+              else if (ide === 'cursor') name = 'Cursor';
+              else if (ide === 'windsurf') name = 'Windsurf';
+              else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc)';
+              else name = ide;
+
+              return {
+                name: `${name}${installedTag}`,
+                value: ide,
+                checked: !isInstalled
+              };
+            });
+
+            const { selectedCopilotIDEs } = await customPrompts.prompt([
+              {
+                type: 'checkbox',
+                name: 'selectedCopilotIDEs',
+                message: 'Which IDEs do you use with GitHub Copilot?',
+                choices: copilotChoices
+              }
+            ]);
+
+            selectedIDEs = selectedCopilotIDEs;
+          }
+        }
 
         if (selectedIDEs.length > 0) {
           for (const selectedIde of selectedIDEs) {
@@ -411,30 +562,27 @@ program
               continue;
             }
           }
+        }
+      }
 
-          // Step 5: Tool Spotlight - Show users what they just unlocked
-          if (selectedIDEs.length > 0) {
-            layout.section();
-            const { wantSpotlight } = await customPrompts.prompt([
-              {
-                type: 'confirm',
-                name: 'wantSpotlight',
-                message: 'Would you like a quick tour of the security tools now available to your AI?',
-                default: true
-              }
-            ]);
-
-            if (wantSpotlight) {
-              const { displayToolSpotlight } = await import('./utils/toolSpotlight.js');
-              await displayToolSpotlight();
-            } else {
-              const { displayToolSummary } = await import('./utils/toolSpotlight.js');
-              displayToolSummary();
-            }
+      // Step 5: Tool Spotlight - Show users what they just unlocked
+      if (selectedIDEs.length > 0) {
+        layout.section();
+        const { wantSpotlight } = await customPrompts.prompt([
+          {
+            type: 'confirm',
+            name: 'wantSpotlight',
+            message: 'Would you like a quick tour of the security tools now available to your AI?',
+            default: true
           }
+        ]);
+
+        if (wantSpotlight) {
+          const { displayToolSpotlight } = await import('./utils/toolSpotlight.js');
+          await displayToolSpotlight();
         } else {
-          console.log(typography.accent('No IDEs selected'));
-          console.log(typography.dim('You can configure them manually later'));
+          const { displayToolSummary } = await import('./utils/toolSpotlight.js');
+          displayToolSummary();
         }
       }
 
