@@ -15,6 +15,7 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 import { createRequire } from "module";
+import { v4 as uuidv4 } from "uuid";
 
 import { saveKey, getKey } from "../api/auth.js";
 import { scanState } from "./scanState.js";
@@ -246,8 +247,9 @@ function setupVulnzapTools(server: McpServer): void {
                     repository,
                     branch: getCurrentBranch(repo) || undefined,
                     files: files.map(f => ({
-                        name: f.name,
-                        content: f.content
+                        path: f.name,
+                        content: f.content,
+                        changed: true
                     })),
                     userIdentifier
                 });
@@ -575,8 +577,17 @@ function setupVulnzapTools(server: McpServer): void {
         async ({ repo, scan_id }) => {
             try {
                 if (!vulnzapClient) {
-                    console.error('Failed to initialize VulnzapClient');
-                    process.exit(1);
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Failed to initialize VulnzapClient",
+                                    message: "Failed to initialize VulnzapClient. Please try again later."
+                                }, null, 2)
+                            }
+                        ]
+                    };
                 }
 
                 // Check if it's a git repository
@@ -664,4 +675,128 @@ function setupVulnzapTools(server: McpServer): void {
             }
         }
     );
+
+    server.registerTool(
+        "vulnzap.security_assistant",
+        {
+            title: "This security assistant for securing the code you generate. (Your friendly neighbourhood policeman)",
+            description: "This tool must be called before you start making any changes for the task user assigned to you, what this tool will do is start watching the changes you made and then when you're finished making changes wait for few seconds (can run a terminal command to wait for 10 seconds), call the security_assistant_results tool to get the results.",
+            inputSchema: z.object({
+                path: z.string().describe("The folder path you're going to work on. The assistant will monitor for changes on that path.")
+            })
+        },
+        async ({ path }, { sessionId }) => {
+            try {
+                if (!vulnzapClient) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Failed to initialize VulnzapClient",
+                                    message: "Failed to initialize VulnzapClient. Please try again later."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+                const session = sessionId || uuidv4();
+                const watcher = vulnzapClient.securityAssistant(path, session)
+                if (watcher) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    message: "Security assistant started.",
+                                    nextSteps: `Proceed making changes and when you're done, prefrerrably wait for a few seconds and call the vulnzap.security_assistant_results tool with this sessionId: ${session} to get the results`
+                                }, null, 2)
+                            }
+                        ]
+                    }
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Failed to start the watcher, contact support"
+                        }
+                    ]
+                }
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Failed to start the watcher, contact support"
+                        }
+                    ]
+                }
+            }
+        }
+    )
+
+    server.registerTool(
+        "vulnzap.security_assistant_results",
+        {
+            title: "This tool will give you the results the security assistant came up with for the changes you made",
+            description: "This tool will give you the results the security assistant came up with for the changes you made, it will give you a list of vulnerabilities found in the changes you made. This tool must be called after you've made changes and waited for few seconds (can run a terminal command to wait for 10 seconds), call this tool with the session id you got from the security_assistant tool.",
+            inputSchema: z.object({
+                session: z.string().describe("The session id you need the results for"),
+                wait: z.number().optional().describe("The number of seconds to wait for the results, default is 10 seconds")
+            })
+        },
+        async ({ session, wait }) => {
+            try {
+                if (!vulnzapClient) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Failed to initialize VulnzapClient",
+                                    message: "Failed to initialize VulnzapClient. Please try again later."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+                if (wait) {
+                    await new Promise(resolve => setTimeout(resolve, wait * 1000));
+                }
+                const res = await vulnzapClient.getIncrementalScanResults(session)
+                if (res.success) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    response: res.data
+                                }, null, 2)
+                            }
+                        ]
+                    }
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                error: res.error
+                            })
+                        }
+                    ]
+                }
+            } catch (error) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: "Failed to get results, contact support"
+                        }
+                    ]
+                }
+            }
+        }
+    )
 }

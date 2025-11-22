@@ -1962,6 +1962,32 @@ async function connectIDE(ide: string) {
       configPath = path.join(process.cwd(), '.cursor', 'mcp.json');
       configDescription = 'Workspace-scoped (this project only)';
 
+      // Add rules for cursor for agent to call the mcp tools 
+      const agentRulesFilePath = path.join(process.cwd(), 'AGENTS.md');
+      const agentRulesFileContent = `\n\n### VulnZap MCP Guidelines
+
+## Overview
+Use VulnZap's tools to proactively identify and report security vulnerabilities within the codebase.
+
+## Workflow
+Your primary workflow consists of the following steps:
+
+1. **Start the security assistant**: Call the \`vulnzap_security_assistant\` tool with the path to the directory you intend to work on. This tool will continuously monitor the specified directory for any file changes and automatically trigger security scans.
+
+2. **Retrieve Scan Results**: Once you have completed your changes, call the \`vulnzap_security_assistant_results\` tool to obtain the scan results. This tool also accepts a 'wait' parameter in seconds. If the scan is still in progress, you can re-run the tool with an increased wait time.
+
+3. **Address Vulnerabilities**: Analyze the scan results to identify any vulnerabilities. Use the provided information to implement the necessary fixes. If no vulnerabilities are found, the tool will indicate that the code is secure.
+`;
+      if (!fs.existsSync(agentRulesFilePath)) {
+        fs.writeFileSync(agentRulesFilePath, agentRulesFileContent);
+      } else {
+        // Check if rules already exist, if not, add them
+        const agentRulesFileContent = fs.readFileSync(agentRulesFilePath, 'utf8');
+        if (!agentRulesFileContent.includes("## Rules for using VulnZap and its tools.")) {
+          fs.appendFileSync(agentRulesFilePath, agentRulesFileContent);
+        }
+      }
+
       // Ensure .cursor directory exists
       const workspaceDir = path.dirname(configPath);
       if (!fs.existsSync(workspaceDir)) {
