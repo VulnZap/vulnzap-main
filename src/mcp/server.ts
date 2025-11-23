@@ -14,7 +14,6 @@ import dotenv from "dotenv";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { createRequire } from "module";
 import { v4 as uuidv4 } from "uuid";
 
 import { saveKey, getKey } from "../api/auth.js";
@@ -37,9 +36,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const packageJson = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8'));
 const version = packageJson.version;
-
-// Use createRequire to import @vulnzap/client (it only has require exports)
-const require = createRequire(import.meta.url);
 
 // Global VulnzapClient instance
 let vulnzapClient: VulnzapClient | null = null;
