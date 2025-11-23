@@ -1242,15 +1242,15 @@ program
         
         spinner.start('Saving scan results...');
         try {
-          if (res.success && res.data) {
+          if (res && typeof res === 'object') {
             if (!fs.existsSync(outputDir)) {
               fs.mkdirSync(outputDir, { recursive: true });
             }
             const outputFile = path.join(outputDir, `vulnzap-results-${sessionId}.json`);
-            fs.writeFileSync(outputFile, JSON.stringify(res.data, null, 2));
+            fs.writeFileSync(outputFile, JSON.stringify(res, null, 2));
             spinner.succeed(`\nScan results saved to: ${outputFile}`);
           } else {
-            spinner.warn(`\nCould not retrieve scan results: ${res.error || 'No data returned.'}`);
+            spinner.warn(`\nCould not retrieve scan results: ${res || 'No data returned.'}`);
           }
         } catch (error: any) {
           spinner.fail('Failed to save results');
