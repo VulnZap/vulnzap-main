@@ -1232,9 +1232,9 @@ program
       });
 
       const saveResults = async (res: any) => {
-        const outputDir = options.output ? path.resolve(options.output) : path.join(process.cwd(), '.vulnzap', 'incremental');
+        const outputDir = options.output ? path.resolve(options.output) : path.join(dirPath, '.vulnzap', 'incremental');
         if (!options.output) {
-          const vulnzapCwdDir = path.join(process.cwd(), '.vulnzap');
+          const vulnzapCwdDir = path.join(dirPath, '.vulnzap');
           if (!fs.existsSync(vulnzapCwdDir)) {
             fs.mkdirSync(vulnzapCwdDir, { recursive: true });
           }
@@ -1279,14 +1279,18 @@ program
         vulnzapClient.on('completed', async (completed: any) => {
           console.log(typography.success(`\nWatcher completed: ${completed.message}`));
           const res = await vulnzapClient.stopSecurityAssistant(sessionId);
-          await saveResults(res);
+          if (res.success) {
+            await saveResults(res.data);
+          }
           process.exit(0);
         });
 
         const timeoutHandle = setTimeout(async () => {
           console.log(typography.dim('\nWatcher session timed out.'));
           const res = await vulnzapClient.stopSecurityAssistant(sessionId);
-          await saveResults(res);
+          if (res.success) {
+            await saveResults(res.data);
+          }
           process.exit(0);
         }, timeout);
   
@@ -1294,7 +1298,9 @@ program
           console.log(typography.dim('\nWatcher stopped manually.'));
           clearTimeout(timeoutHandle);
           const res = await vulnzapClient.stopSecurityAssistant(sessionId);
-          await saveResults(res);
+          if (res.success) {
+            await saveResults(res.data);
+          }
           process.exit(0);
         });
 
