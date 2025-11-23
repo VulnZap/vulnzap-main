@@ -21,6 +21,8 @@ import { displayUserWelcome, displayUserStatus } from './utils/userDisplay.js';
 import { getMockProfile } from './utils/mockUser.js';
 // Lazy import for MCP server - only loaded when 'mcp' command is executed
 import { startRepoScan, getRepoScanStatus, getScanResults, streamScanEvents, ScanEvent } from './api/repoScan.js';
+import { v4 as uuidv4 } from 'uuid';
+import { VulnzapClient } from '@vulnzap/client';
 
 // Get package version
 const __filename = fileURLToPath(import.meta.url);
@@ -1196,6 +1198,116 @@ program
       // Start the MCP server
       await startMcpServer();
     } catch (error: any) {
+      process.exit(1);
+    }
+  });
+
+// Command: vulnzap watch
+program
+  .command('watch')
+  .description('Watch a directory for changes and run security analysis')
+  .option('-t, --timeout <milliseconds>', 'Timeout for the watcher in milliseconds', '120000') // 2 minutes default
+  .option('-o, --output <dir>', 'Output directory for scan results')
+  .action(async (options) => {
+    layout.banner(version);
+    console.log(typography.header('Security Assistant'));
+    layout.spacer();
+
+    const spinner = createSpinner('Initializing security assistant...');
+    spinner.start();
+
+    try {
+      const apiKey = await getKey();
+      const vulnzapClient = new VulnzapClient({ apiKey });
+      const dirPath = process.cwd();
+      const timeout = parseInt(options.timeout, 10);
+      const sessionId = uuidv4();
+
+      spinner.text = `Starting security assistant on "${dirPath}"...`;
+
+      const watcher = vulnzapClient.securityAssistant({
+        dirPath: dirPath,
+        sessionId: sessionId,
+        timeout: timeout,
+      });
+
+      const saveResults = async (res: any) => {
+        const outputDir = options.output ? path.resolve(options.output) : path.join(process.cwd(), '.vulnzap', 'incremental');
+        if (!options.output) {
+          const vulnzapCwdDir = path.join(process.cwd(), '.vulnzap');
+          if (!fs.existsSync(vulnzapCwdDir)) {
+            fs.mkdirSync(vulnzapCwdDir, { recursive: true });
+          }
+        }
+        
+        spinner.start('Saving scan results...');
+        try {
+          if (res.success && res.data) {
+            if (!fs.existsSync(outputDir)) {
+              fs.mkdirSync(outputDir, { recursive: true });
+            }
+            const outputFile = path.join(outputDir, `vulnzap-results-${sessionId}.json`);
+            fs.writeFileSync(outputFile, JSON.stringify(res.data, null, 2));
+            spinner.succeed(`\nScan results saved to: ${outputFile}`);
+          } else {
+            spinner.warn(`\nCould not retrieve scan results: ${res.error || 'No data returned.'}`);
+          }
+        } catch (error: any) {
+          spinner.fail('Failed to save results');
+          console.error(typography.error(error.message));
+        }
+      };
+
+      if (watcher) {
+        spinner.succeed('Security assistant is running.');
+        console.log(typography.dim(`  Watching for file changes in: ${dirPath}`));
+        console.log(typography.dim(`  Session ID: ${sessionId}`));
+        console.log(typography.dim(`  Timeout: ${timeout / 1000} seconds`));
+        console.log(typography.accent('  Press Ctrl+C to stop the watcher and save results.'));
+        layout.spacer();
+        console.log(typography.dim('  To prevent logs and results from being committed, add ".vulnzap" to your .gitignore file.'));
+        layout.spacer();
+        
+        vulnzapClient.on("update", (update: any) => {
+          console.log(typography.dim(`  Update: ${update.message}`));
+        });
+
+        vulnzapClient.on('error', (error: any) => {
+          console.error(typography.error(`\nWatcher error: ${error.message}`));
+        });
+
+        vulnzapClient.on('completed', async (completed: any) => {
+          console.log(typography.success(`\nWatcher completed: ${completed.message}`));
+          const res = await vulnzapClient.stopSecurityAssistant(sessionId);
+          await saveResults(res);
+          process.exit(0);
+        });
+
+        const timeoutHandle = setTimeout(async () => {
+          console.log(typography.dim('\nWatcher session timed out.'));
+          const res = await vulnzapClient.stopSecurityAssistant(sessionId);
+          await saveResults(res);
+          process.exit(0);
+        }, timeout);
+  
+        process.on('SIGINT', async () => {
+          console.log(typography.dim('\nWatcher stopped manually.'));
+          clearTimeout(timeoutHandle);
+          const res = await vulnzapClient.stopSecurityAssistant(sessionId);
+          await saveResults(res);
+          process.exit(0);
+        });
+
+      } else {
+        spinner.fail('Failed to start the security assistant.');
+        process.exit(1);
+      }
+    } catch (error: any) {
+      spinner.fail('Failed to start security assistant');
+      console.error(typography.error(error.message));
+      if (error.code === 'MODULE_NOT_FOUND') {
+          console.error(typography.dim('Could not load the Vulnzap client library. This might be a dependency issue.'));
+      }
       process.exit(1);
     }
   });

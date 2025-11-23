@@ -77,21 +77,6 @@ function transformFindings(findings: any[]): Array<{
 }
 
 /**
- * Calculate severity counts
- */
-function calculateCounts(findings: any[]): { high: number; medium: number; low: number; critical?: number } {
-    const counts = { high: 0, medium: 0, low: 0, critical: 0 };
-    findings.forEach((f: any) => {
-        const severity = (f.severity || 'medium').toLowerCase();
-        if (severity === 'critical') counts.critical = (counts.critical || 0) + 1;
-        else if (severity === 'high') counts.high++;
-        else if (severity === 'medium') counts.medium++;
-        else counts.low++;
-    });
-    return counts;
-}
-
-/**
  * Start the VulnZap MCP server
  *
  * @returns Promise<void>
@@ -154,7 +139,7 @@ export async function startMcpServer(): Promise<void> {
 function setupVulnzapTools(server: McpServer): void {
     // Tool 1: vulnzap.scan_diff
     server.registerTool(
-        'vulnzap.scan_diff',
+        'vulnzap_scan_diff',
         {
             title: "Scan the current diff",
             description: "Triggers a fast, non-blocking security scan on your local changes. Call this tool immediately after making a local commit. Do not wait for the results; continue with your next task. You will check the results of this scan later using vulnzap.status before your next commit.",
@@ -301,7 +286,7 @@ function setupVulnzapTools(server: McpServer): void {
 
     // Tool 2: vulnzap.status
     server.registerTool(
-        'vulnzap.status',
+        'vulnzap_status',
         {
             title: "Get the latest results for a scan or for the latest scan",
             description: "Retrieves the results of the most recent security scan. Call this tool before making a new commit to ensure your previous changes were secure. If vulnerabilities are found, fix them before proceeding. Do not poll this tool repeatedly; only check it when you are ready to commit new work or if you need to verify a fix.",
@@ -468,7 +453,7 @@ function setupVulnzapTools(server: McpServer): void {
 
     // Tool 3: vulnzap.full_scan
     server.registerTool(
-        'vulnzap.full_scan',
+        'vulnzap_full_scan',
         {
             title: "Baseline scan for the entire repository",
             description: "Performs a comprehensive security scan of the entire repository. Run this tool when you are preparing to push code to a remote repository or deploy to production. This ensures no vulnerabilities are introduced into the codebase. This is a long-running operation.",
@@ -565,7 +550,7 @@ function setupVulnzapTools(server: McpServer): void {
 
     // Tool 4: vulnzap.report
     server.registerTool(
-        'vulnzap.report',
+        'vulnzap_report',
         {
             title: "Human readable snapshot of the last scan results",
             description: "Human readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.",
@@ -677,7 +662,7 @@ function setupVulnzapTools(server: McpServer): void {
     );
 
     server.registerTool(
-        "vulnzap.security_assistant",
+        "vulnzap_security_assistant",
         {
             title: "This security assistant for securing the code you generate. (Your friendly neighbourhood policeman)",
             description: "This tool must be called before you start making any changes for the task user assigned to you, what this tool will do is start watching the changes you made and then when you're finished making changes wait for few seconds (can run a terminal command to wait for 10 seconds), call the security_assistant_results tool to get the results.",
@@ -701,7 +686,11 @@ function setupVulnzapTools(server: McpServer): void {
                     };
                 }
                 const session = sessionId || uuidv4();
-                const watcher = vulnzapClient.securityAssistant(path, session)
+                const watcher = vulnzapClient.securityAssistant({
+                    dirPath: path,
+                    sessionId: session,
+                    timeout: 60000
+                });
                 if (watcher) {
                     return {
                         content: [
@@ -737,7 +726,7 @@ function setupVulnzapTools(server: McpServer): void {
     )
 
     server.registerTool(
-        "vulnzap.security_assistant_results",
+        "vulnzap_security_assistant_results",
         {
             title: "This tool will give you the results the security assistant came up with for the changes you made",
             description: "This tool will give you the results the security assistant came up with for the changes you made, it will give you a list of vulnerabilities found in the changes you made. This tool must be called after you've made changes and waited for few seconds (can run a terminal command to wait for 10 seconds), call this tool with the session id you got from the security_assistant tool.",
