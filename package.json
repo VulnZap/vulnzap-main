@@ -1,6 +1,6 @@
 {
   "name": "vulnzap",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Secure AI-generated code by intercepting vulnerabilities in real-time",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

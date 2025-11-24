@@ -1,40 +1,20 @@
-# VulnZap 🔒
+# VulnZap
 
 [![License: BUSL-1.1](https://img.shields.io/badge/License-BUSL--1.1-blue)](https://opensource.org/licenses/BUSL-1.1)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D16.0.0-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8.3-blue)](https://www.typescriptlang.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP-Model%20Context%20Protocol-purple)](https://modelcontextprotocol.io/)
 
-**The Missing Security Layer for AI-Generated Code**
+## Overview
 
-VulnZap is a real-time vulnerability scanning tool that integrates seamlessly with AI-powered IDEs like Cursor, Cline, and Windsurf. It automatically intercepts package installation commands and scans for known vulnerabilities before they enter your codebase, ensuring your AI-generated code remains secure.
+VulnZap is a security-first development tool that provides real-time vulnerability scanning for AI-generated code. It integrates with AI-powered development environments through the Model Context Protocol (MCP) and provides comprehensive CLI tooling for security analysis.
 
-## 🚀 Features
+The platform supports multi-ecosystem vulnerability detection across npm, pip, go, rust, maven, gradle, composer, nuget, and pypi packages, with intelligent caching and offline fallback capabilities.
 
-### Core Security Features
-- **Real-time Vulnerability Scanning**: Automatically scans packages before installation
-- **Multi-Ecosystem Support**: npm, pip, go, rust, maven, gradle, composer, nuget, pypi
-- **MCP Protocol Integration**: Native support for Model Context Protocol
-- **Smart Caching**: 5-day cache with automatic invalidation for performance
-- **Offline Mode**: Local vulnerability database fallback when API is unavailable
-
-### AI-Enhanced Features
-- **Amplified Security Prompts**: Transform feature requests into security-hardened implementations
-- **Smart Documentation**: Context-aware package documentation and security guidelines  
-- **Latest Toolset Recommendations**: Up-to-date package recommendations with security scoring
-- **OWASP Top 10 Compliance**: Built-in security guidance following OWASP standards
-
-### IDE Integrations
-- **Cursor IDE**: Full MCP integration + automatic extension installation
-- **Windsurf IDE**: Full MCP integration + automatic extension installation
-- **Cline**: MCP integration supported
-- **VS Code**: Extension-only integration (no MCP server)
-- **Generic MCP Support**: Compatible with any MCP-enabled environment
-
-## 📦 Installation
+## Installation
 
 ### Prerequisites
-- Node.js 16.0.0 or higher
+- Node.js >= 16.0.0
 - npm or yarn package manager
 
 ### Global Installation
@@ -42,7 +22,7 @@ VulnZap is a real-time vulnerability scanning tool that integrates seamlessly wi
 npm install -g vulnzap
 ```
 
-### From Source
+### Build from Source
 ```bash
 git clone https://github.com/VulnZap/vulnzap-main.git
 cd vulnzap
@@ -51,319 +31,612 @@ npm run build
 npm link
 ```
 
-## 🛠️ Quick Start
+## CLI Commands
 
-### 1. Complete Setup (Recommended)
+### Authentication and Configuration
+
+#### `vulnzap init`
+Complete onboarding workflow with interactive setup.
+
 ```bash
-# Complete onboarding with API key setup and IDE integration
-npx vulnzap init
-```
-
-This command will:
-- Guide you through API key setup
-- Automatically detect installed IDEs (VSCode, Cursor, Windsurf)
-- Allow you to select multiple IDEs for integration
-- Configure MCP settings and install extensions
-- Set up your development environment for secure coding
-
-### 2. Manual Setup (Alternative)
-```bash
-# Setup API key only
-vulnzap setup -k <your-api-key>
-
-# Setup API key with specific IDE (cursor|windsurf|cline|vscode)
-vulnzap setup -k <your-api-key> --ide cursor
-```
-
-### 3. Start Scanning
-Once connected, VulnZap automatically scans packages when your AI assistant tries to install them.
-
-## 🔧 CLI Commands
-
-### Setup & Configuration
-```bash
-# Complete setup with guided onboarding (recommended)
 vulnzap init
+```
 
-# Setup API key only
+Features:
+- Magic authentication flow with QR code support
+- Automatic IDE detection (VS Code, Cursor, Windsurf, JetBrains)
+- Multi-IDE configuration support
+- MCP server setup for compatible IDEs
+
+#### `vulnzap setup`
+Manual authentication and IDE configuration.
+
+```bash
 vulnzap setup -k <api-key>
+vulnzap setup -k <api-key> --ide <cursor|windsurf|cline|vscode>
+```
 
-# Setup API key with specific IDE
-vulnzap setup -k <api-key> --ide <cursor|vscode|windsurf>
+Options:
+- `-k, --key <key>`: API key for authentication
+- `--ide <ide-name>`: Target IDE for integration
 
-# Check account information
+#### `vulnzap account`
+Display account information and usage statistics.
+
+```bash
 vulnzap account
 ```
 
-### Project Management
-```bash
-# Check server status
-vulnzap status
+Displays:
+- User profile information
+- Current subscription tier
+- API usage metrics
+- Remaining scan quota
 
-# View help
-vulnzap help
+#### `vulnzap status`
+System health check and configuration verification.
+
+```bash
+vulnzap status
 ```
 
+Validates:
+- Server connectivity
+- Authentication status
+- User profile data
+- System configuration
+
 ### Security Scanning
+
+#### `vulnzap check`
+Analyze individual packages for vulnerabilities.
+
 ```bash
-# Check individual package
+# Recommended format
 vulnzap check <ecosystem:package@version>
 vulnzap check npm:express@4.17.1
 vulnzap check pip:requests@2.25.1
 
-# Alternative syntax
-vulnzap check <package> --ecosystem <eco> --version <ver>
-vulnzap check express --ecosystem npm --version 4.17.1
-
-# Batch scan current directory
-vulnzap batch-scan [--ecosystem <ecosystem>] [--output <file>]
-
-# Repository scan (GitHub)
-vulnzap scan <https://github.com/owner/repo> [--branch <branch>] [--wait] [--output <file>] [--key <api-key>]
+# Alternative format
+vulnzap check <package@version> --ecosystem <ecosystem>
+vulnzap check express@4.17.1 --ecosystem npm
 ```
 
-### IDE Integration
-```bash
-# Connect to a specific IDE (alternative to init/setup)
-vulnzap connect [--ide cursor|windsurf|cline|vscode]
+Supported ecosystems: `npm`, `pip`, `go`, `rust`, `maven`, `gradle`, `composer`, `nuget`, `pypi`
 
-# Start MCP server manually (for IDEs that use MCP)
+#### `vulnzap batch-scan`
+Scan all dependencies in the current project directory.
+
+```bash
+vulnzap batch-scan
+vulnzap batch-scan --ecosystem npm
+vulnzap batch-scan --output results.json
+```
+
+Options:
+- `--ecosystem <ecosystem>`: Filter by specific package ecosystem
+- `--output <file>`: Save results to JSON file (default: `.vulnzap/batch-scan-results.json`)
+
+Automatically detects and parses:
+- `package.json` (npm)
+- `requirements.txt` (pip)
+- `go.mod` (go)
+- `Cargo.toml` (rust)
+- `pom.xml` (maven)
+- `build.gradle` (gradle)
+- `composer.json` (composer)
+- `*.csproj` (nuget)
+
+#### `vulnzap scan`
+Initiate repository-wide vulnerability scan for GitHub repositories.
+
+```bash
+vulnzap scan <repository-url>
+vulnzap scan https://github.com/owner/repo --branch main
+vulnzap scan https://github.com/owner/repo --wait --output scan-results.json
+```
+
+Options:
+- `-b, --branch <branch>`: Target branch (default: `main`)
+- `--wait`: Block until scan completion
+- `-o, --output <file>`: Save results to JSON file
+- `--key <api-key>`: Override default API key
+
+Returns:
+- Job ID for tracking
+- Project ID for dashboard access
+- Real-time scan progress (with `--wait`)
+- Remaining line quota
+
+#### `vulnzap watch`
+Monitor directory for file changes and perform incremental security analysis.
+
+```bash
+vulnzap watch
+vulnzap watch --timeout 120000
+vulnzap watch --output ./scan-results
+```
+
+Options:
+- `-t, --timeout <ms>`: Session timeout in milliseconds (default: 120000)
+- `-o, --output <dir>`: Output directory for results (default: `.vulnzap/incremental`)
+
+Features:
+- Real-time file change detection
+- Incremental vulnerability scanning
+- Session-based result tracking
+- Automatic timeout handling
+- Manual stop with Ctrl+C
+
+### IDE Integration
+
+#### `vulnzap connect`
+Configure MCP integration for supported IDEs.
+
+```bash
+vulnzap connect
+vulnzap connect --ide cursor
+vulnzap connect --ide windsurf
+```
+
+Supported IDEs:
+- `cursor`: Cursor IDE
+- `windsurf`: Windsurf IDE
+- `antigravity`: Antigravity IDE
+- `claude`: Claude Code
+- `cline`: Cline (VS Code extension)
+- `vscode`: VS Code (extension only)
+- `jetbrains`: JetBrains IDEs (IntelliJ, WebStorm, etc.)
+
+Configuration locations:
+- Cursor: `.cursor/mcp.json`
+- Windsurf: `.codeium/windsurf/mcp_config.json`
+- Cline: Platform-specific MCP settings
+
+#### `vulnzap mcp`
+Start the MCP server for IDE integration.
+
+```bash
 vulnzap mcp
 ```
 
-#### Supported IDEs
-- **Cursor IDE**: Full MCP integration + extension
-- **Windsurf IDE**: Full MCP integration + extension
-- **Cline**: MCP integration supported
-- **VS Code**: Extension only (no MCP server)
+Environment variables:
+- `VULNZAP_API_KEY`: API key for authentication
+- `VULNZAP_DEBUG`: Enable verbose logging
 
-#### Automatic IDE Detection
-The `init` command automatically detects which of the supported IDEs are installed on your system (VS Code, Cursor, Windsurf) and allows you to select multiple IDEs for integration.
+This command is typically invoked automatically by IDE MCP configurations.
 
-## MCP Tools (For AI Agents)
+### Utility Commands
 
-VulnZap provides 4 MCP tools for AI agents to perform vulnerability scanning during development:
+#### `vulnzap tools`
+Display interactive guide to available MCP tools.
 
-### 1. `vulnzap.scan_diff`
-Fast, incremental, non-blocking scan on the current git diff. Fire-and-forget: call this and continue coding, then poll results via `vulnzap.status`.
+```bash
+vulnzap tools
+```
 
-**Input:**
-```json
+#### `vulnzap help`
+Display comprehensive help information.
+
+```bash
+vulnzap help
+```
+
+## MCP Tools Reference
+
+VulnZap exposes seven MCP tools for AI agent integration. These tools enable autonomous security scanning during development workflows.
+
+### Tool 1: `vulnzap_scan_diff`
+
+Performs fast, non-blocking incremental scan on git diff.
+
+**Purpose**: Scan only changed files since a specific commit reference. Designed for frequent use during active development.
+
+**Input Schema**:
+```typescript
 {
-  "repo": ".",           // Path to repo (default: ".")
-  "since": "HEAD",       // Commit/ref to diff against (default: "HEAD")
-  "paths": ["optional/globs/**"]  // Optional: limit scope with glob patterns
+  repo: string;              // Repository path (default: ".")
+  since?: string;            // Commit/ref to diff against (default: "HEAD")
+  paths?: string[];          // Optional glob patterns to limit scope
 }
 ```
 
-**Response:**
-```json
+**Response**:
+```typescript
 {
-  "scan_id": "vz_91f...",
-  "queued": true,
-  "eta_ms": 8000,
-  "next_hint": "call vulnzap.status with scan_id",
-  "summary": {
-    "files_considered": 7,
-    "mode": "diff"
+  scan_id: string;           // Unique scan identifier
+  queued: boolean;           // Scan queued status
+  eta_ms: number;            // Estimated completion time
+  next_hint: string;         // Suggested next action
+  summary: {
+    files_considered: number;
+    mode: "diff";
   }
 }
 ```
 
-**Usage:** Call at natural checkpoints (pre-commit or after sizable changes). The agent continues coding while the scan runs in the background.
+**Error Responses**:
+- Not a git repository
+- Could not determine commit hash
+- Could not determine repository URL
+- No files changed in diff
 
-### 2. `vulnzap.status`
-Get the latest results for a scan or for the latest scan. This is how the agent finds out whether the last diff or full scan had vulnerabilities.
-
-**Input:**
-```json
-{ "scan_id": "vz_91f..." }  // Explicit scan_id
-// or
-{ "latest": true }           // Get latest scan for this repo
+**Usage Pattern**:
+```
+1. Make code changes
+2. Call vulnzap_scan_diff
+3. Continue coding (non-blocking)
+4. Poll vulnzap_status before next commit
 ```
 
-**Response (ready):**
+### Tool 2: `vulnzap_status`
+
+Retrieve scan results for a specific scan ID or latest scan.
+
+**Purpose**: Check completion status and retrieve vulnerability findings. Primary mechanism for agents to discover security issues.
+
+**Input Schema**:
+```typescript
+{
+  repo: string;              // Repository path
+  scan_id?: string;          // Specific scan to check
+  latest?: boolean;          // Get latest scan for repo
+}
+```
+
+**Response (Completed)**:
+```typescript
+{
+  ready: true;
+  findings: Array<{
+    id: string;
+    severity: "critical" | "high" | "medium" | "low";
+    path: string;
+    range: {
+      start: { line: number; col: number; }
+    };
+    description: string;
+  }>;
+  next_hint: string;
+}
+```
+
+**Response (In Progress)**:
+```typescript
+{
+  ready: false;
+  poll_after_ms: number;     // Suggested polling interval
+}
+```
+
+**Polling Strategy**:
+- Initial poll: 5 seconds
+- Subsequent polls: 5-30 seconds with exponential backoff
+- Do not poll continuously
+
+### Tool 3: `vulnzap_full_scan`
+
+Comprehensive repository-wide security scan.
+
+**Purpose**: Baseline security analysis of entire codebase. Reserved for pre-deployment or pre-push workflows.
+
+**Input Schema**:
+```typescript
+{
+  repo: string;              // Repository path (default: ".")
+}
+```
+
+**Response**:
+```typescript
+{
+  scan_id: string;           // Unique scan identifier
+  queued: boolean;           // Scan queued status
+  eta_ms: number;            // Estimated completion (typically 180000ms)
+}
+```
+
+**Performance Characteristics**:
+- Significantly slower than diff scans
+- Scans entire repository history
+- Use sparingly (pre-push, pre-deploy only)
+- Poll results via `vulnzap_status`
+
+### Tool 4: `vulnzap_report`
+
+Generate human-readable scan report in markdown format.
+
+**Purpose**: Create formatted vulnerability reports for PR descriptions, documentation, or audit logs.
+
+**Input Schema**:
+```typescript
+{
+  repo: string;              // Repository path
+  scan_id: string;           // Scan to generate report for
+}
+```
+
+**Response**:
+```typescript
+{
+  report: string;            // Markdown-formatted report
+}
+```
+
+**Report Contents**:
+- Vulnerability summary
+- Severity breakdown
+- Affected files and line numbers
+- Remediation recommendations
+- Reference links
+
+### Tool 5: `vulnzap_security_assistant`
+
+Start file watcher for incremental security analysis.
+
+**Purpose**: Monitor directory for changes and perform continuous security scanning. Designed for active development sessions.
+
+**Input Schema**:
+```typescript
+{
+  path: string;              // Directory path to monitor
+}
+```
+
+**Response**:
+```typescript
+{
+  message: string;
+  nextSteps: string;         // Instructions for retrieving results
+  sessionId: string;         // Session identifier (in nextSteps)
+}
+```
+
+**Workflow**:
+```
+1. Call vulnzap_security_assistant with target directory
+2. Receive session ID
+3. Make code changes
+4. Wait 10+ seconds for analysis
+5. Call vulnzap_security_assistant_results with session ID
+```
+
+**Session Management**:
+- Automatic timeout: 60 seconds of inactivity
+- Timeout resets on each file change
+- Session data cached in `.vulnzap/client/sessions/`
+
+### Tool 6: `vulnzap_security_assistant_results`
+
+Retrieve results from active security assistant session.
+
+**Purpose**: Fetch vulnerability findings from incremental scan session.
+
+**Input Schema**:
+```typescript
+{
+  session: string;           // Session ID from security_assistant
+  wait?: number;             // Optional wait time in seconds
+}
+```
+
+**Response (Success)**:
+```typescript
+{
+  response: {
+    findings: Array<Vulnerability>;
+    summary: string;
+    scannedFiles: string[];
+  }
+}
+```
+
+**Response (Error)**:
+```typescript
+{
+  error: string;             // Error description
+}
+```
+
+**Best Practices**:
+- Wait 10+ seconds after code changes before calling
+- Use `wait` parameter to add additional delay if needed
+- Session must be active (not timed out)
+
+### Tool 7: `vulnzap_security_assistant_stop`
+
+Terminate security assistant session and retrieve final results.
+
+**Purpose**: Explicitly stop file watching and get final scan results.
+
+**Input Schema**:
+```typescript
+{
+  session: string;           // Session ID to stop
+}
+```
+
+**Response (Success)**:
+```typescript
+{
+  message: string;
+  nextSteps: string;
+  response: {
+    findings: Array<Vulnerability>;
+    summary: string;
+  }
+}
+```
+
+**Response (Error)**:
+```typescript
+{
+  error: string;
+}
+```
+
+**Use Cases**:
+- Manual session termination
+- Retrieve final results before timeout
+- Clean up resources after development session
+
+## MCP Agent Workflow
+
+Recommended integration pattern for AI agents:
+
+### Initialization Phase
+```
+1. Call vulnzap_status with {latest: true, repo: "."}
+2. Review any existing vulnerabilities
+3. Fix critical issues before proceeding
+```
+
+### Active Development Phase
+```
+1. Make code changes
+2. Call vulnzap_scan_diff with {repo: ".", since: "HEAD"}
+3. Continue development (non-blocking)
+4. Periodically call vulnzap_status to check results
+5. If vulnerabilities found:
+   a. Fix issues
+   b. Call vulnzap_scan_diff again
+   c. Verify fixes with vulnzap_status
+```
+
+### Pre-Commit Phase
+```
+1. Call vulnzap_status to ensure no pending issues
+2. If clean, proceed with commit
+3. If issues found, fix and rescan
+```
+
+### Pre-Push Phase
+```
+1. Call vulnzap_full_scan with {repo: "."}
+2. Poll vulnzap_status until ready: true
+3. Review all findings
+4. Fix critical and high severity issues
+5. Call vulnzap_report for documentation
+6. Attach report to PR description
+```
+
+### Continuous Monitoring (Alternative)
+```
+1. Call vulnzap_security_assistant with {path: "./src"}
+2. Save session ID
+3. Make code changes
+4. Wait 10+ seconds
+5. Call vulnzap_security_assistant_results
+6. Review findings and fix issues
+7. Call vulnzap_security_assistant_stop when done
+```
+
+## Configuration
+
+### IDE MCP Configuration
+
+#### Cursor IDE
+File: `.cursor/mcp.json`
 ```json
 {
-  "ready": true,
-  "open_issues": [
-    {
-      "id": "VZ-123",
-      "severity": "high",
-      "path": "api/login.ts",
-      "range": {
-        "start": { "line": 41, "col": 7 }
+  "mcpServers": {
+    "VulnZap": {
+      "command": "npx",
+      "args": ["vulnzap", "mcp"],
+      "env": {
+        "VULNZAP_API_KEY": "your_api_key"
       }
     }
-  ],
-  "counts": {
-    "high": 1,
-    "medium": 1,
-    "low": 0
-  },
-  "next_hint": "fix issues, then call scan_diff again before next commit"
+  }
 }
 ```
 
-**Response (still running):**
+#### Windsurf IDE
+File: `.codeium/windsurf/mcp_config.json`
 ```json
 {
-  "ready": false,
-  "poll_after_ms": 5000
+  "mcpServers": {
+    "VulnZap": {
+      "command": "npx",
+      "args": ["vulnzap", "mcp"],
+      "env": {
+        "VULNZAP_API_KEY": "your_api_key"
+      }
+    }
+  }
 }
 ```
 
-**Usage:** Poll this tool to check scan progress. If `ready: false`, wait and poll again with backoff (5-30 seconds).
+#### Cline
+Configured via `vulnzap connect --ide cline`. Manual configuration requires setting MCP server command to `npx vulnzap mcp` with `VULNZAP_API_KEY` environment variable.
 
-### 3. `vulnzap.full_scan`
-Baseline scan for the entire repository, used before serious pushes or deploys. Slower than diff scans, use sparingly.
+### Environment Variables
 
-**Input:**
-```json
-{
-  "repo": ".",           // Repository path (default: ".")
-  "mode": "baseline"     // Scan mode (default: "baseline")
-}
-```
+- `VULNZAP_API_KEY`: Authentication key for API access
+- `VULNZAP_DEBUG`: Enable debug logging for MCP server
 
-**Response:**
-```json
-{
-  "scan_id": "vz_full_7c2",
-  "queued": true,
-  "eta_ms": 180000
-}
-```
+### Cache Configuration
 
-**Usage:** Call once before serious push or deploy. Continue coding while it runs, then poll `vulnzap.status` until complete.
+VulnZap maintains a local cache in `~/.vulnzap/` with the following structure:
+- `cache/`: Vulnerability scan results (5-day TTL)
+- `config/`: User configuration and API keys
+- `logs/`: MCP server logs (when debug enabled)
+- `client/sessions/`: Security assistant session data
 
-### 4. `vulnzap.report`
-Human-readable snapshot of the last scan results. Intended for attaching to PRs or agent logs.
 
-**Input:**
-```json
-{
-  "scan_id": "vz_91f...",
-  "format": "md"  // Report format (default: "md")
-}
-```
-
-**Response:**
-```json
-{
-  "markdown": "## Vulnzap Findings\n- [HIGH] api/login.ts:L41 ..."
-}
-```
-
-**Usage:** After any fix cycle, call this to generate a markdown summary for PR descriptions, agent logs, or comment threads.
-
-### Recommended Agent Workflow
-
-1. **Startup Check**: Call `vulnzap.status` with `{"latest": true}` to check for existing issues
-2. **While Coding**: At checkpoints, call `vulnzap.scan_diff` and continue coding
-3. **Poll Status**: Periodically call `vulnzap.status` with the scan_id
-4. **Fix Issues**: If issues found, fix them and call `vulnzap.scan_diff` again
-5. **Before Push**: Call `vulnzap.full_scan` once, poll until complete
-6. **Generate Report**: Optionally call `vulnzap.report` to attach to PRs
-
-**Key Behaviors:**
-- `vulnzap.scan_diff`: Fast, non-blocking, stackable. Use frequently on diffs.
-- `vulnzap.status`: The only way the agent learns about problems. Poll it.
-- `vulnzap.full_scan`: Reserved for pre-push or pre-deploy workflows (slower).
-- `vulnzap.report`: For humans. Every other tool returns JSON for the agent.
-
-## 📂 Project Structure
+## Project Structure
 
 ```
 vulnzap/
 ├── src/
-│   ├── api/                 # API integration layer
-│   │   ├── auth.ts          # Authentication & OAuth
-│   │   ├── batchScan.ts     # Batch scanning functionality
-│   │   ├── repoScan.ts      # Repository scanning (jobs & SSE)
-│   │   └── apis.ts          # API utilities
-│   ├── config/             # Configuration management
-│   │   └── config.ts       # App configuration
-│   ├── services/           # Core services
-│   │   └── cache.ts        # Caching service
-│   ├── types/              # TypeScript definitions
-│   │   └── response.ts     # API response types
-│   ├── utils/              # Utility functions
-│   │   ├── packageExtractor.ts  # Package file parsing
-│   │   ├── apiClient.ts    # HTTP client wrapper
-│   │   ├── checks.ts       # Project validation
-│   │   └── gitUtils.ts     # Git operations (commit hash, diff, repo URL)
-│   ├── mcp/                # MCP server implementation
-│   │   ├── server.ts       # MCP server entry & tool definitions
-│   │   └── scanState.ts    # In-memory scan state management
-│   ├── cli.ts              # Command-line interface
-│   └── tui.ts              # Terminal UI (internal)
-├── tests/                  # Test suite
-├── dist/                   # Compiled JavaScript
-├── package.json            # Project dependencies
-├── tsconfig.json           # TypeScript configuration
-└── README.md              # This file
+│   ├── api/                    # API integration layer
+│   │   ├── auth.ts             # Authentication & OAuth
+│   │   ├── batchScan.ts        # Batch scanning functionality
+│   │   ├── repoScan.ts         # Repository scanning (jobs & SSE)
+│   │   └── apis.ts             # API utilities
+│   ├── config/                 # Configuration management
+│   │   └── config.ts           # Application configuration
+│   ├── services/               # Core services
+│   │   └── cache.ts            # Caching service (5-day TTL)
+│   ├── types/                  # TypeScript type definitions
+│   │   └── response.ts         # API response types
+│   ├── utils/                  # Utility functions
+│   │   ├── packageExtractor.ts # Package file parsing
+│   │   ├── apiClient.ts        # HTTP client wrapper
+│   │   ├── checks.ts           # Project validation
+│   │   ├── gitUtils.ts         # Git operations
+│   │   └── mcpConfig.ts        # MCP configuration utilities
+│   ├── mcp/                    # MCP server implementation
+│   │   ├── server.ts           # MCP server entry & tool definitions
+│   │   └── scanState.ts        # In-memory scan state management
+│   ├── cli.ts                  # Command-line interface
+│   └── tui.ts                  # Terminal UI components
+├── tests/                      # Test suite
+├── dist/                       # Compiled JavaScript output
+├── package.json                # Project dependencies
+├── tsconfig.json               # TypeScript configuration
+└── README.md                   # Documentation
 ```
 
-### Package Detection Flow
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│ Package Install │───►│   Extraction    │───►│  Vulnerability  │
-│   Command       │    │   & Parsing     │    │    Scanning     │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                              │
-                              ▼
-                       ┌─────────────────┐
-                       │ Supported Files │
-                       │ • package.json  │
-                       │ • requirements  │
-                       │ • go.mod        │
-                       │ • Cargo.toml    │
-                       │ • pom.xml       │
-                       │ • *.csproj      │
-                       │ • build.gradle  │
-                       │ • composer.json │
-                       └─────────────────┘
+## Development
+
+### Building from Source
+
+```bash
+# Install dependencies
+npm install
+
+# Build TypeScript
+npm run build
+
+# Development server with hot reload
+npm run dev
+
+# CLI in watch mode
+npm run cli
 ```
 
-## 🔧 Configuration
-
-### IDE Configuration Files
-
-#### Cursor (.cursor/mcp.json)
-```json
-{
-  "mcpServers": {
-    "VulnZap": {
-      "command": "npx",
-      "args": ["vulnzap", "mcp"],
-      "env": {
-        "VULNZAP_API_KEY": "your_api_key"
-      }
-    }
-  }
-}
-```
-
-#### Windsurf (.codeium/windsurf/mcp_config.json)
-```json
-{
-  "mcpServers": {
-    "VulnZap": {
-      "command": "npx",
-      "args": ["vulnzap", "mcp"],
-      "env": {
-        "VULNZAP_API_KEY": "your_api_key"
-      }
-    }
-  }
-}
-```
-
-#### Cline (Windows example)
-The `vulnzap connect --ide cline` command will write the MCP config automatically. If you need to do it manually, set the MCP server to run `npx vulnzap mcp` and provide `VULNZAP_API_KEY` in the environment.
-
-## 🧪 Testing
+### Testing
 
 ```bash
 # Run all tests
@@ -381,65 +654,61 @@ npm run lint
 # Fix linting issues
 npm run lint:fix
 ```
-## 🔄 Development Workflow
-
-### Building from Source
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Start development server with hot reload
-npm run dev
-
-# Start CLI in watch mode
-npm run cli
-```
 
 ### Contributing
+
 1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
+2. Create a feature branch: `git checkout -b feature/feature-name`
 3. Make your changes
 4. Add tests for new functionality
 5. Ensure all tests pass: `npm test`
-6. Commit your changes: `git commit -m 'Add amazing feature'`
-7. Push to the branch: `git push origin feature/amazing-feature`
+6. Commit your changes: `git commit -m 'Add feature'`
+7. Push to the branch: `git push origin feature/feature-name`
 8. Open a Pull Request
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
-### Common Issues
+### Authentication Issues
 
-#### "API key not configured"
+**Error: "API key not configured"**
 ```bash
-# Solution: Set up your API key
+# Solution: Configure API key
 vulnzap setup -k your_api_key_here
 ```
 
-#### "VulnZap server is down"
+### Server Connectivity
+
+**Error: "VulnZap server is down"**
 ```bash
 # Check server status
 vulnzap status
 
-# VulnZap will automatically use local cache in offline mode
+# VulnZap automatically uses local cache in offline mode
 ```
 
-#### "No packages found to scan"
-Make sure your project contains supported package files:
+### Package Detection
+
+**Error: "No packages found to scan"**
+
+Ensure your project contains supported package files:
 - `package.json` (npm)
 - `requirements.txt` (pip)
 - `go.mod` (go)
 - `Cargo.toml` (rust)
-- etc.
+- `pom.xml` (maven)
+- `build.gradle` (gradle)
+- `composer.json` (composer)
+- `*.csproj` (nuget)
 
-#### MCP Connection Issues
-1. Verify IDE MCP configuration
-2. Check that vulnzap is in your PATH
+### MCP Connection Issues
+
+1. Verify IDE MCP configuration file exists
+2. Check that `vulnzap` is in your PATH: `which vulnzap`
 3. Restart your IDE after configuration changes
+4. Verify API key is set in MCP configuration
 
 ### Debug Mode
+
 ```bash
 # Enable verbose logging
 VULNZAP_DEBUG=true vulnzap mcp
@@ -448,18 +717,62 @@ VULNZAP_DEBUG=true vulnzap mcp
 tail -f ~/.vulnzap/logs/mcp-server.log
 ```
 
-## 📞 Support
+## Technical Specifications
+
+### Supported Ecosystems
+
+| Ecosystem | Package File | Version Format |
+|-----------|--------------|----------------|
+| npm | package.json | semver |
+| pip | requirements.txt | PEP 440 |
+| go | go.mod | semver |
+| rust | Cargo.toml | semver |
+| maven | pom.xml | Maven versioning |
+| gradle | build.gradle | Maven versioning |
+| composer | composer.json | semver |
+| nuget | *.csproj | semver |
+
+### Cache Behavior
+
+- **TTL**: 5 days
+- **Location**: `~/.vulnzap/cache/`
+- **Invalidation**: Automatic on expiry
+- **Offline Mode**: Automatic fallback when API unavailable
+
+### API Rate Limits
+
+Rate limits vary by subscription tier:
+- **Free**: 1,000 scans/month
+- **Pro**: Unlimited scans
+- **Enterprise**: Unlimited scans + priority support
+
+## Security
+
+### Vulnerability Reporting
+
+To report security vulnerabilities, please email: security@plawlabs.com
+
+Do not create public GitHub issues for security vulnerabilities.
+
+### API Key Storage
+
+API keys are stored securely using the system keychain:
+- **macOS**: Keychain Access
+- **Linux**: libsecret
+- **Windows**: Credential Manager
+
+## Support
 
 - **Documentation**: [https://vulnzap.com/docs](https://vulnzap.com/docs)
 - **Issues**: [GitHub Issues](https://github.com/vulnzap/vulnzap/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/vulnzap/vulnzap/discussions)
 - **Email**: support@plawlabs.com
 
-## 📄 License
+## License
 
 This project is licensed under the Business Source License 1.1 (BUSL-1.1) - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - **Model Context Protocol**: For enabling seamless AI integration
 - **OWASP**: For security best practices and vulnerability guidelines
@@ -468,6 +781,7 @@ This project is licensed under the Business Source License 1.1 (BUSL-1.1) - see 
 
 ---
 
-**Made with ❤️ by the Plaw Inc Team**
+**Developed by Plaw Inc**
 
-*Securing the future of AI-generated code.* 
+*Securing the future of AI-generated code.*
+ 

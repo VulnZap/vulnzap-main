@@ -657,6 +657,7 @@ function setupVulnzapTools(server: McpServer): void {
         }
     );
 
+    // Tool 5: vulnzap.security_assistant
     server.registerTool(
         "vulnzap_security_assistant",
         {
@@ -721,6 +722,7 @@ function setupVulnzapTools(server: McpServer): void {
         }
     )
 
+    // Tool 6: vulnzap.security_assistant_results
     server.registerTool(
         "vulnzap_security_assistant_results",
         {
@@ -772,12 +774,86 @@ function setupVulnzapTools(server: McpServer): void {
                         }
                     ]
                 }
-            } catch (error) {
+            } catch (error: any) {
                 return {
                     content: [
                         {
                             type: "text",
-                            text: "Failed to get results, contact support"
+                            text: JSON.stringify({
+                                error: error.message || "Unknown error",
+                                message: `Failed to get results: ${error.message}, try checking the session id and if it's the one you got from the security_assistant tool`
+                            }, null, 2)
+                        }
+                    ]
+                }
+            }
+        }
+    )
+
+    // Tool 7: vulnzap_security_assistant_stop
+    server.registerTool(
+        "vulnzap_security_assistant_stop",
+        {
+            title: "This tool will stop the security assistant",
+            description: "This tool will stop the security assistant, it will stop the security assistant and return the results.",
+            inputSchema: z.object({
+                session: z.string().describe("The session id you need the results for")
+            })
+        },
+        async ({ session }) => {
+            try {
+                if (!vulnzapClient) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    error: "Failed to initialize VulnzapClient",
+                                    message: "Failed to initialize VulnzapClient. Please try again later."
+                                }, null, 2)
+                            }
+                        ]
+                    };
+                }
+                const res = await vulnzapClient.stopSecurityAssistant(session)
+                if (res.success) {
+                    return {
+                        content: [
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    message: "Security assistant stopped.",
+                                    nextSteps: `The security assistant has been stopped. Below given are the results of the security assistant.`
+                                }, null, 2)
+                            },
+                            {
+                                type: "text",
+                                text: JSON.stringify({
+                                    response: res.data
+                                }, null, 2)
+                            }
+                        ]
+                    }
+                }
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                error: res.error
+                            })
+                        }
+                    ]
+                }
+            } catch (error: any) {
+                return {
+                    content: [
+                        {
+                            type: "text",
+                            text: JSON.stringify({
+                                error: error.message || "Unknown error",
+                                message: `Failed to stop the security assistant: ${error.message}`
+                            }, null, 2)
                         }
                     ]
                 }
