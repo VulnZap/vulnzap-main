@@ -83,11 +83,11 @@ program
   .command('setup')
   .description('Configure authentication and settings')
   .option('-k, --key <key>', 'Provide API key directly')
-  .option('--ide <ide-name>', 'Configure IDE integration (cursor, windsurf, cline)')
   .action(async (options) => {
+    // Import MCP setup utilities
+    const { configureMcpInteractive } = await import('./utils/mcpSetup.js');
+
     layout.banner(version);
-    console.log(typography.header('Setup Configuration'));
-    layout.spacer();
     console.log(typography.header('Setup Configuration'));
     layout.spacer();
 
@@ -101,14 +101,14 @@ program
       }
 
       if (existingKey) {
-        console.log(typography.dim('  An API key is already configured'));
+        console.log(typography.success('✓ API key is already configured'));
         layout.spacer();
 
         const { confirm } = await customPrompts.prompt([
           {
             type: 'confirm',
             name: 'confirm',
-            message: 'Replace existing configuration?',
+            message: 'Replace existing API key?',
             default: false
           }
         ]);
@@ -116,10 +116,19 @@ program
         if (!confirm) {
           console.log(typography.dim('  Configuration unchanged'));
 
-          if (options.ide) {
-            layout.section();
-            console.log(typography.accent('Configuring IDE integration...'));
-            await connectIDE(options.ide);
+          // Still offer MCP configuration
+          layout.section();
+          const { configureMcp } = await customPrompts.prompt([
+            {
+              type: 'confirm',
+              name: 'configureMcp',
+              message: 'Would you like to configure IDE integration?',
+              default: true
+            }
+          ]);
+
+          if (configureMcp) {
+            await configureMcpInteractive();
           }
           return;
         }
@@ -162,166 +171,27 @@ program
       // Show personalized welcome message
       await displayUserWelcome();
 
-      // IDE Selection and Extension Installation
-      let selectedIDEs = options.ide ? [options.ide] : [];
-      if (selectedIDEs.length === 0) {
-        layout.section();
-        console.log(typography.accent('IDE Integration (Optional)'));
-        layout.spacer();
-
-        const { configureIde } = await customPrompts.prompt([
-          {
-            type: 'confirm',
-            name: 'configureIde',
-            message: 'Would you like to configure IDE integration?',
-            default: true
-          }
-        ]);
-
-        if (configureIde) {
-          // Detect installed IDEs
-          const spinner = createSpinner('Detecting installed IDEs...');
-          spinner.start();
-          const installedIDEs = await detectInstalledIDEs();
-          spinner.stop();
-
-          if (installedIDEs.length === 0) {
-            console.log(typography.warning('No supported IDEs detected on your system'));
-            console.log(typography.dim('Supported: GitHub Copilot (VS Code, Cursor, Windsurf, JetBrains), Antigravity, Claude Code'));
-            console.log(typography.dim('You can configure them manually with: vulnzap connect'));
-            selectedIDEs = [];
-          } else {
-            // Step 1: Ask what category they want to configure
-            const { ideCategory } = await customPrompts.prompt([
-              {
-                type: 'list',
-                name: 'ideCategory',
-                message: 'What would you like to configure?',
-                choices: [
-                  {
-                    name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
-                    value: 'standalone'
-                  },
-                  {
-                    name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
-                    value: 'copilot'
-                  },
-                  {
-                    name: 'Skip for now',
-                    value: 'skip'
-                  }
-                ]
-              }
-            ]);
-
-            if (ideCategory === 'skip') {
-              selectedIDEs = [];
-            } else if (ideCategory === 'standalone') {
-              // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
-              const standaloneIDEs = installedIDEs.filter(ide =>
-                ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
-              );
-
-              if (standaloneIDEs.length === 0) {
-                console.log(typography.warning('No standalone IDEs detected'));
-                console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
-                selectedIDEs = [];
-              } else {
-                const standaloneChoices = standaloneIDEs.map(ide => {
-                  const isInstalled = isMcpInstalled(ide);
-                  const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-                  let name = '';
-                  if (ide === 'cursor') name = 'Cursor IDE';
-                  else if (ide === 'windsurf') name = 'Windsurf IDE';
-                  else if (ide === 'antigravity') name = 'Antigravity';
-                  else if (ide === 'claude') name = 'Claude Code';
-                  else name = ide;
-
-                  return {
-                    name: `${name}${installedTag}`,
-                    value: ide,
-                    checked: !isInstalled
-                  };
-                });
-
-                const { chosenIDEs } = await customPrompts.prompt([
-                  {
-                    type: 'checkbox',
-                    name: 'chosenIDEs',
-                    message: 'Which standalone IDEs would you like to configure?',
-                    choices: standaloneChoices
-                  }
-                ]);
-
-                selectedIDEs = chosenIDEs;
-              }
-            } else if (ideCategory === 'copilot') {
-              // Filter for Copilot-compatible IDEs
-              const copilotIDEs = installedIDEs.filter(ide =>
-                ['vscode', 'cursor', 'windsurf', 'jetbrains'].includes(ide)
-              );
-
-              if (copilotIDEs.length === 0) {
-                console.log(typography.warning('No GitHub Copilot-compatible IDEs detected'));
-                console.log(typography.dim('Install VS Code, Cursor, Windsurf, or a JetBrains IDE to continue'));
-                selectedIDEs = [];
-              } else {
-                const copilotChoices = copilotIDEs.map(ide => {
-                  const isInstalled = isMcpInstalled(ide);
-                  const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-                  let name = '';
-                  if (ide === 'vscode') name = 'VS Code';
-                  else if (ide === 'cursor') name = 'Cursor';
-                  else if (ide === 'windsurf') name = 'Windsurf';
-                  else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc)';
-                  else name = ide;
-
-                  return {
-                    name: `${name}${installedTag}`,
-                    value: ide,
-                    checked: !isInstalled
-                  };
-                });
-
-                const { chosenIDEs } = await customPrompts.prompt([
-                  {
-                    type: 'checkbox',
-                    name: 'chosenIDEs',
-                    message: 'Which IDEs do you use with GitHub Copilot?',
-                    choices: copilotChoices
-                  }
-                ]);
-
-                selectedIDEs = chosenIDEs;
-              }
-            }
-          }
+      // Ask about IDE integration
+      layout.section();
+      const { configureIde } = await customPrompts.prompt([
+        {
+          type: 'confirm',
+          name: 'configureIde',
+          message: 'Would you like to configure IDE integration?',
+          default: true
         }
-      }
+      ]);
 
-      if (selectedIDEs.length > 0) {
-        for (const selectedIde of selectedIDEs) {
-          layout.spacer();
-          console.log(typography.accent(`Setting up ${selectedIde}...`));
+      if (configureIde) {
+        const result = await configureMcpInteractive();
 
-          // Configure MCP for all supported IDEs
-          const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
-          mcpSpinner.start();
-          try {
-            await connectIDE(selectedIde);
-            mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
-          } catch (error: any) {
-            mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
-            console.error(typography.error('Error:'), error.message);
-            continue;
-          }
+        if (result.configured > 0) {
+          layout.section();
+          console.log(typography.success('Setup complete!'));
+          console.log(typography.dim('Your development environment is now secured with VulnZap'));
         }
-
-        layout.section();
-        console.log(typography.success('IDE setup complete!'));
-        console.log(typography.dim('Your development environments are now secured with VulnZap'));
+      } else {
+        console.log(typography.dim('You can configure IDE integration later with: vulnzap connect'));
       }
 
     } catch (error: any) {
@@ -335,6 +205,9 @@ program
   .command('init')
   .description('Complete onboarding and configuration')
   .action(async () => {
+    // Import MCP setup utilities
+    const { configureMcpInteractive } = await import('./utils/mcpSetup.js');
+
     // Handle Ctrl+C gracefully
     const handleExit = () => {
       layout.spacer();
@@ -380,7 +253,7 @@ program
       }
 
       if (existingKey) {
-        console.log(typography.success('Authentication configured'));
+        console.log(typography.success('✓ Authentication configured'));
         layout.spacer();
 
         const { replaceKey } = await customPrompts.prompt([
@@ -399,9 +272,9 @@ program
         }
       }
 
-      // Step 3: Magic Auth Flow
+      // Step 3: Magic Auth Flow (if needed)
       if (!existingKey) {
-        const { displayMagicAuth, displayAuthWaiting, displayAuthSuccess, displayAuthError } = await import('./utils/magicAuth.js');
+        const { displayMagicAuth, displayAuthSuccess, displayAuthError } = await import('./utils/magicAuth.js');
 
         await displayMagicAuth();
 
@@ -424,151 +297,27 @@ program
         await displayUserWelcome();
       }
 
-      // Step 4: IDE Selection and Configuration
+      // Step 4: Ask about MCP configuration
       layout.section();
-      console.log(typography.accent('Setting up IDE integration'));
-      layout.spacer();
+      const { configureMcp } = await customPrompts.prompt([
+        {
+          type: 'confirm',
+          name: 'configureMcp',
+          message: 'Would you like to configure IDE integration now?',
+          default: true
+        }
+      ]);
 
-      // Detect installed IDEs
-      const ideSpinner = createSpinner('Detecting installed IDEs...');
-      ideSpinner.start();
-      const installedIDEs = await detectInstalledIDEs();
-      ideSpinner.stop();
-
-      let selectedIDEs: string[] = [];
-
-      if (installedIDEs.length === 0) {
-        console.log(typography.warning('No supported IDEs detected on your system'));
-        console.log(typography.dim('Supported: GitHub Copilot (VS Code, Cursor, Windsurf, JetBrains), Antigravity, Claude Code'));
-        console.log(typography.dim('You can configure them manually later with: vulnzap connect'));
+      let mcpConfigured = false;
+      if (configureMcp) {
+        const result = await configureMcpInteractive();
+        mcpConfigured = result.configured > 0;
       } else {
-        // Step 1: Ask what category they want to configure
-        const { ideCategory } = await customPrompts.prompt([
-          {
-            type: 'list',
-            name: 'ideCategory',
-            message: 'What would you like to configure?',
-            choices: [
-              {
-                name: 'Standalone (Cursor IDE, Windsurf IDE, Antigravity, Claude Code)',
-                value: 'standalone'
-              },
-              {
-                name: 'GitHub Copilot (works with VS Code, Cursor, Windsurf, JetBrains)',
-                value: 'copilot'
-              },
-              {
-                name: 'Skip for now',
-                value: 'skip'
-              }
-            ]
-          }
-        ]);
-
-        if (ideCategory === 'skip') {
-          console.log(typography.dim('You can set this up later with: vulnzap connect'));
-        } else if (ideCategory === 'standalone') {
-          // Filter for standalone IDEs (includes Cursor and Windsurf as standalone)
-          const standaloneIDEs = installedIDEs.filter(ide =>
-            ['cursor', 'windsurf', 'antigravity', 'claude'].includes(ide)
-          );
-
-          if (standaloneIDEs.length === 0) {
-            console.log(typography.warning('No standalone IDEs detected'));
-            console.log(typography.dim('Install Cursor, Windsurf, Antigravity, or Claude Code to continue'));
-          } else {
-            const standaloneChoices = standaloneIDEs.map(ide => {
-              const isInstalled = isMcpInstalled(ide);
-              const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-              let name = '';
-              if (ide === 'cursor') name = 'Cursor IDE';
-              else if (ide === 'windsurf') name = 'Windsurf IDE';
-              else if (ide === 'antigravity') name = 'Antigravity';
-              else if (ide === 'claude') name = 'Claude Code';
-              else name = ide;
-
-              return {
-                name: `${name}${installedTag}`,
-                value: ide,
-                checked: !isInstalled
-              };
-            });
-
-            const { selectedStandaloneIDEs } = await customPrompts.prompt([
-              {
-                type: 'checkbox',
-                name: 'selectedStandaloneIDEs',
-                message: 'Which standalone IDEs would you like to configure?',
-                choices: standaloneChoices
-              }
-            ]);
-
-            selectedIDEs = selectedStandaloneIDEs;
-          }
-        } else if (ideCategory === 'copilot') {
-          // Filter for Copilot-compatible IDEs
-          const copilotIDEs = installedIDEs.filter(ide =>
-            ['vscode', 'cursor', 'windsurf', 'jetbrains'].includes(ide)
-          );
-
-          if (copilotIDEs.length === 0) {
-            console.log(typography.warning('No GitHub Copilot-compatible IDEs detected'));
-            console.log(typography.dim('Install VS Code, Cursor, Windsurf, or a JetBrains IDE to continue'));
-          } else {
-            const copilotChoices = copilotIDEs.map(ide => {
-              const isInstalled = isMcpInstalled(ide);
-              const installedTag = isInstalled ? chalk.green(' (Configured)') : '';
-
-              let name = '';
-              if (ide === 'vscode') name = 'VS Code';
-              else if (ide === 'cursor') name = 'Cursor';
-              else if (ide === 'windsurf') name = 'Windsurf';
-              else if (ide === 'jetbrains') name = 'JetBrains (IntelliJ/WebStorm/etc)';
-              else name = ide;
-
-              return {
-                name: `${name}${installedTag}`,
-                value: ide,
-                checked: !isInstalled
-              };
-            });
-
-            const { selectedCopilotIDEs } = await customPrompts.prompt([
-              {
-                type: 'checkbox',
-                name: 'selectedCopilotIDEs',
-                message: 'Which IDEs do you use with GitHub Copilot?',
-                choices: copilotChoices
-              }
-            ]);
-
-            selectedIDEs = selectedCopilotIDEs;
-          }
-        }
-
-        if (selectedIDEs.length > 0) {
-          for (const selectedIde of selectedIDEs) {
-            layout.spacer();
-            console.log(typography.accent(`Setting up ${selectedIde}...`));
-
-            // Configure MCP for all supported IDEs
-            const mcpSpinner = createSpinner(`Configuring ${selectedIde} MCP integration...`);
-            mcpSpinner.start();
-            try {
-              await connectIDE(selectedIde);
-              mcpSpinner.succeed(typography.success(`${selectedIde} MCP integration configured`));
-            } catch (error: any) {
-              mcpSpinner.fail(typography.error(`${selectedIde} MCP configuration failed`));
-              console.error(typography.error('Error:'), error.message);
-              continue;
-            }
-          }
-        }
+        console.log(typography.dim('You can configure IDE integration later with: vulnzap connect'));
       }
 
-      // Step 5: Tool Spotlight - Show users what they just unlocked
-      if (selectedIDEs.length > 0) {
+      // Step 5: Tool Spotlight (if MCP was configured)
+      if (mcpConfigured) {
         layout.section();
         const { wantSpotlight } = await customPrompts.prompt([
           {
@@ -601,8 +350,12 @@ program
       // Quick actions
       console.log(typography.accent('  Quick Start:'));
       console.log(typography.body('  • Open your IDE and start coding'));
-      console.log(typography.body('  • Your AI now has security superpowers'));
-      console.log(typography.body('  • Vulnerabilities will be caught automatically'));
+      if (mcpConfigured) {
+        console.log(typography.body('  • Your AI now has security superpowers'));
+        console.log(typography.body('  • Vulnerabilities will be caught automatically'));
+      } else {
+        console.log(typography.body('  • Run `vulnzap connect` to configure IDE integration'));
+      }
       layout.section();
 
       // Additional resources
@@ -900,40 +653,41 @@ program
 program
   .command('connect')
   .description('Configure IDE integration')
-  .option('--ide <ide-name>', 'IDE to connect with (cursor, cline, windsurf)', 'cursor')
-  .action(async (options) => {
+  .action(async () => {
+    // Import MCP setup utilities
+    const { configureMcpInteractive } = await import('./utils/mcpSetup.js');
+
     layout.banner(version);
-    console.log(typography.header('MCP Server'));
+    console.log(typography.header('IDE Integration'));
     layout.spacer();
 
-    // Prompt for IDE if not provided
-    if (!options.ide) {
-      const { ide } = await customPrompts.prompt([{
-        type: 'list',
-        name: 'ide',
-        message: 'Which development environment are you using?',
-        choices: [
-          { name: `Cursor IDE${isMcpInstalled('cursor') ? chalk.green(' (Installed)') : ''}`, value: 'cursor' },
-          { name: `Windsurf IDE${isMcpInstalled('windsurf') ? chalk.green(' (Installed)') : ''}`, value: 'windsurf' },
-          { name: `Antigravity (New)${isMcpInstalled('antigravity') ? chalk.green(' (Installed)') : ''}`, value: 'antigravity' },
-          { name: `Claude Code${isMcpInstalled('claude') ? chalk.green(' (Installed)') : ''}`, value: 'claude' }
-        ],
-        default: 'cursor'
-      }]);
-      options.ide = ide;
+    // Check authentication
+    try {
+      await getKey();
+      console.log(typography.success('✓ Authentication verified'));
+      layout.spacer();
+    } catch (error) {
+      console.log(typography.error('Authentication required'));
+      layout.spacer();
+      console.log(typography.dim('Please run `vulnzap init` or `vulnzap setup` first to authenticate'));
+      process.exit(1);
     }
 
-    const spinner = createSpinner(`Configuring ${options.ide} integration...`);
-    spinner.start();
-
     try {
-      await connectIDE(options.ide);
-      spinner.succeed(typography.success('IDE integration configured'));
-      layout.spacer();
-      console.log(typography.dim('Your development environment is now secured with VulnZap'));
+      // Run interactive MCP configuration
+      const result = await configureMcpInteractive();
+
+      if (result.configured > 0) {
+        layout.spacer();
+        console.log(typography.success('IDE integration complete!'));
+        console.log(typography.dim('Your development environment is now secured with VulnZap'));
+      } else if (result.skipped) {
+        layout.spacer();
+        console.log(typography.dim('Configuration skipped. You can run this command again anytime.'));
+      }
     } catch (error: any) {
-      spinner.fail(typography.error('Configuration failed'));
-      console.error(typography.error('Error:'), error.message);
+      layout.spacer();
+      console.error(typography.error('Configuration failed:'), error.message);
       process.exit(1);
     }
   });
@@ -1091,102 +845,6 @@ program
     }
   });
 
-// Command: vulnzap demo (for testing personalized features)
-program
-  .command('demo')
-  .description('Demo personalized CLI features (development only)')
-  .option('--tier <tier>', 'User tier to demo (free, pro, enterprise)', 'free')
-  .action(async (options) => {
-    layout.banner(version);
-    console.log(typography.header('Personalized CLI Demo'));
-    layout.section();
-
-    // Create mock profile for demo
-    const mockProfile = getMockProfile(options.tier as 'free' | 'pro' | 'enterprise');
-
-    try {
-      console.log(typography.accent(`Demonstrating ${options.tier} tier experience:`));
-      layout.spacer();
-
-      // Manually create the displays with mock data
-      const firstName = mockProfile.username;
-      console.log(typography.subheader(`Welcome back, ${firstName}`));
-
-      // Tier and usage display
-      const tierDisplay = mockProfile.subscription.tier === 'free' ? typography.dim('Free') :
-        mockProfile.subscription.tier === 'pro' ? typography.accent('Pro') :
-          typography.success('Enterprise');
-
-      const remaining = mockProfile.subscription.line_scans_limit - mockProfile.apiUsage;
-      const percentage = (mockProfile.apiUsage / mockProfile.subscription.line_scans_limit) * 100;
-
-      let usageDisplay;
-      if (percentage >= 90) {
-        usageDisplay = typography.error(`${remaining} scans remaining this month`);
-      } else if (percentage >= 75) {
-        usageDisplay = typography.warning(`${remaining} scans remaining this month`);
-      } else {
-        usageDisplay = typography.dim(`${remaining} scans remaining this month`);
-      }
-
-      console.log(`${tierDisplay} • ${usageDisplay}`);
-
-      // FOMO message
-      if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
-        layout.spacer();
-        if (percentage >= 90) {
-          console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
-        } else {
-          console.log(typography.dim('Consider upgrading to Pro to avoid hitting limits'));
-        }
-      }
-
-      layout.section();
-      console.log(typography.subheader('Full Status View:'));
-      layout.spacer();
-
-      console.log(typography.accent('Account Information'));
-      layout.spacer();
-      console.log(typography.dim(`  Name: ${mockProfile.username}`));
-      console.log(typography.dim(`  Email: ${mockProfile.email}`));
-      console.log(typography.dim(`  Tier: ${mockProfile.subscription.tier.charAt(0).toUpperCase() + mockProfile.subscription.tier.slice(1)}`));
-
-      layout.spacer();
-      console.log(typography.accent('Usage This Month'));
-      layout.spacer();
-
-      const percentageRounded = Math.round(percentage);
-      console.log(typography.dim(`  Scans used: ${mockProfile.apiUsage} of ${mockProfile.subscription.line_scans_limit} (${percentageRounded}%)`));
-      console.log(typography.dim(`  Remaining: ${remaining} scans`));
-
-      // Progress bar
-      const barLength = 20;
-      const filledLength = Math.round((mockProfile.apiUsage / mockProfile.subscription.line_scans_limit) * barLength);
-      const bar = '█'.repeat(filledLength) + '░'.repeat(barLength - filledLength);
-
-      let barColor;
-      if (percentage >= 90) barColor = chalk.red;
-      else if (percentage >= 75) barColor = chalk.yellow;
-      else if (percentage >= 50) barColor = chalk.cyan;
-      else barColor = chalk.green;
-
-      console.log(typography.dim(`  Progress: ${barColor(bar)} ${percentageRounded}%`));
-
-      if (mockProfile.subscription.tier === 'free' && percentage >= 75) {
-        layout.section();
-        if (percentage >= 90) {
-          console.log(typography.warning('Upgrade to Pro for unlimited scans and advanced features'));
-        } else {
-          console.log(typography.dim('Consider upgrading to Pro to avoid hitting limits'));
-        }
-        console.log(typography.dim('Visit vulnzap.com/pricing to upgrade'));
-      }
-
-    } catch (error: any) {
-      console.error(typography.error('Demo failed:'), error.message);
-    }
-  });
-
 // Command: vulnzap mcp
 program
   .command('mcp')
@@ -1239,7 +897,7 @@ program
             fs.mkdirSync(vulnzapCwdDir, { recursive: true });
           }
         }
-        
+
         spinner.start('Saving scan results...');
         try {
           if (res && typeof res === 'object') {
@@ -1267,7 +925,7 @@ program
         layout.spacer();
         console.log(typography.dim('  To prevent logs and results from being committed, add ".vulnzap" to your .gitignore file.'));
         layout.spacer();
-        
+
         vulnzapClient.on("update", (update: any) => {
           console.log(typography.dim(`  Update: ${update.message}`));
         });
@@ -1293,7 +951,7 @@ program
           }
           process.exit(0);
         }, timeout);
-  
+
         process.on('SIGINT', async () => {
           console.log(typography.dim('\nWatcher stopped manually.'));
           clearTimeout(timeoutHandle);
@@ -1312,7 +970,7 @@ program
       spinner.fail('Failed to start security assistant');
       console.error(typography.error(error.message));
       if (error.code === 'MODULE_NOT_FOUND') {
-          console.error(typography.dim('Could not load the Vulnzap client library. This might be a dependency issue.'));
+        console.error(typography.dim('Could not load the Vulnzap client library. This might be a dependency issue.'));
       }
       process.exit(1);
     }
@@ -1645,552 +1303,5 @@ if (process.argv.length === 2) {
   layout.section();
   console.log(typography.accent('  npx vulnzap init') + typography.dim('          Complete setup (recommended for new users)'));
   console.log(typography.dim('  vulnzap help                Show all available commands'));
-  layout.section();
-}
-
-// Helper function to detect installed IDEs
-async function detectInstalledIDEs(): Promise<string[]> {
-  const installedIDEs: string[] = [];
-  const supportedIDEs = [
-    { name: 'vscode', command: 'code', displayName: 'VS Code' },
-    { name: 'cursor', command: 'cursor', displayName: 'Cursor IDE' },
-    { name: 'windsurf', command: 'windsurf', displayName: 'Windsurf IDE' }
-  ];
-
-  for (const ide of supportedIDEs) {
-    try {
-      await execSync(`${ide.command} --version`, { stdio: 'pipe' });
-      installedIDEs.push(ide.name);
-    } catch (error) {
-      // Fallback detection when CLI is not on PATH
-      const resolved = resolveIDECLIPath(ide.name);
-      if (resolved) {
-        installedIDEs.push(ide.name);
-      }
-    }
-  }
-
-  // Always add JetBrains as an option (if .idea folder exists, likely a JetBrains project)
-  if (fs.existsSync(path.join(process.cwd(), '.idea'))) {
-    if (!installedIDEs.includes('jetbrains')) {
-      installedIDEs.push('jetbrains');
-    }
-  }
-
-  // Always add these as options even if not auto-detected
-  const alwaysAvailable = ['antigravity', 'claude', 'jetbrains'];
-  for (const ide of alwaysAvailable) {
-    if (!installedIDEs.includes(ide)) {
-      installedIDEs.push(ide);
-    }
-  }
-
-  return installedIDEs;
-}
-
-// Resolve VS Code CLI path when 'code' is not on PATH
-function resolveVSCodeCLIPath(): string | null {
-  const platform = os.platform();
-  const candidates: string[] = [];
-
-  if (platform === 'darwin') {
-    candidates.push('/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code');
-    candidates.push('/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code');
-    candidates.push(join(os.homedir(), 'Applications', 'Visual Studio Code.app', 'Contents', 'Resources', 'app', 'bin', 'code'));
-    candidates.push(join(os.homedir(), 'Applications', 'Visual Studio Code - Insiders.app', 'Contents', 'Resources', 'app', 'bin', 'code'));
-    candidates.push('/usr/local/bin/code');
-    candidates.push('/opt/homebrew/bin/code');
-  } else if (platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
-    candidates.push(join(localAppData, 'Programs', 'Microsoft VS Code', 'bin', 'code.cmd'));
-    candidates.push('C\\\:\\\Program Files\\\Microsoft VS Code\\\bin\\\code.cmd');
-    candidates.push('C\\\:\\\Program Files (x86)\\\Microsoft VS Code\\\bin\\\code.cmd');
-  } else {
-    candidates.push('/usr/bin/code');
-    candidates.push('/snap/bin/code');
-  }
-
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) {
-        return p;
-      }
-    } catch { }
-  }
-  return null;
-}
-
-function resolveIDECLIPath(ide: string): string | null {
-  if (ide === 'vscode') return resolveVSCodeCLIPath();
-  const platform = os.platform();
-  const candidates: string[] = [];
-  if (ide === 'cursor') {
-    if (platform === 'darwin') {
-      candidates.push('/Applications/Cursor.app/Contents/Resources/app/bin/cursor');
-      candidates.push(join(os.homedir(), 'Applications', 'Cursor.app', 'Contents', 'Resources', 'app', 'bin', 'cursor'));
-    } else if (platform === 'win32') {
-      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
-      candidates.push(join(localAppData, 'Programs', 'Cursor', 'bin', 'cursor.exe'));
-    } else {
-      candidates.push('/usr/bin/cursor');
-      candidates.push('/snap/bin/cursor');
-    }
-  } else if (ide === 'windsurf') {
-    if (platform === 'darwin') {
-      candidates.push('/Applications/Windsurf.app/Contents/Resources/app/bin/windsurf');
-      candidates.push(join(os.homedir(), 'Applications', 'Windsurf.app', 'Contents', 'Resources', 'app', 'bin', 'windsurf'));
-    } else if (platform === 'win32') {
-      const localAppData = process.env.LOCALAPPDATA || join(os.homedir(), 'AppData', 'Local');
-      candidates.push(join(localAppData, 'Programs', 'Windsurf', 'bin', 'windsurf.exe'));
-    } else {
-      candidates.push('/usr/bin/windsurf');
-      candidates.push('/snap/bin/windsurf');
-    }
-  }
-  for (const p of candidates) {
-    try {
-      if (fs.existsSync(p)) return p;
-    } catch { }
-  }
-  return null;
-}
-
-function quoteCmdIfNeeded(cmd: string): string {
-  if (!cmd) return cmd;
-  return cmd.includes(' ') ? `"${cmd}"` : cmd;
-}
-
-// Best-effort symlink for VS Code CLI on macOS/Linux
-function tryEnsureVSCodeSymlink(codePath: string): void {
-  try {
-    const platform = os.platform();
-    if (platform === 'darwin' || platform === 'linux') {
-      const binTargets = platform === 'darwin'
-        ? ['/usr/local/bin/code', '/opt/homebrew/bin/code']
-        : ['/usr/local/bin/code'];
-
-      for (const target of binTargets) {
-        try {
-          const targetDir = path.dirname(target);
-          if (!fs.existsSync(target) && fs.existsSync(targetDir)) {
-            fs.symlinkSync(codePath, target);
-          }
-        } catch { }
-      }
-    }
-  } catch { }
-}
-
-// Helper to get MCP config path for a given IDE
-// Helper to get MCP config path for a given IDE
-// Returns primary path (workspace if in project, else global)
-function getMcpConfigPath(ide: string, options?: { workspace?: boolean }): string | null {
-  const homeDir = os.homedir();
-  const cwd = process.cwd();
-
-  if (ide === 'vscode') {
-    // Workspace-scoped (preferred for teams)
-    if (options?.workspace) {
-      return path.join(cwd, '.vscode', 'mcp.json');
-    }
-    // Global user settings - VS Code uses settings.json with "mcp" section
-    // We'll handle this separately in connectIDE
-    return null; // Signal to use settings.json approach
-  }
-
-  if (ide === 'cursor') {
-    // Project-scoped (if in workspace)
-    if (options?.workspace && fs.existsSync(path.join(cwd, '.cursor'))) {
-      return path.join(cwd, '.cursor', 'mcp.json');
-    }
-    // Global fallback
-    return path.join(homeDir, '.cursor', 'mcp.json');
-  }
-
-  if (ide === 'windsurf') {
-    return path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json');
-  }
-
-  if (ide === 'jetbrains') {
-    // Project-scoped - JetBrains uses mcp.json in project root
-    if (options?.workspace) {
-      return path.join(cwd, 'mcp.json');
-    }
-    // Fallback to .idea folder if it exists
-    if (fs.existsSync(path.join(cwd, '.idea'))) {
-      return path.join(cwd, '.idea', 'mcp.json');
-    }
-    return path.join(cwd, 'mcp.json');
-  }
-
-  if (ide === 'antigravity') {
-    return path.join(homeDir, '.gemini', 'antigravity', 'mcp_config.json');
-  }
-
-  if (ide === 'claude') {
-    const platform = os.platform();
-    if (platform === 'darwin') {
-      return path.join(homeDir, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json');
-    } else if (platform === 'win32') {
-      return path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json');
-    } else {
-      return path.join(homeDir, '.claude.json');
-    }
-  }
-
-  return null;
-}
-
-// Helper to check if VulnZap MCP is already installed
-function isMcpInstalled(ide: string): boolean {
-  const configPath = getMcpConfigPath(ide);
-  if (!configPath || !fs.existsSync(configPath)) {
-    return false;
-  }
-
-  try {
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    // Check both schemas: "servers" (VS Code/Cursor) and "mcpServers" (Windsurf/JetBrains)
-    return !!(config.mcpServers?.VulnZap || config.servers?.VulnZap);
-  } catch (e) {
-    return false;
-  }
-}
-
-// Helper function to handle IDE connection logic
-async function connectIDE(ide: string) {
-  const { mergeVulnZapConfig, readConfigFile, writeConfigFile } = await import('./utils/mcpConfig.js');
-
-  // Log the event
-  const logFile = join(os.homedir(), '.vulnzap', 'info.log');
-  const logStream = fs.createWriteStream(logFile, { flags: 'a' });
-  logStream.write(`VulnZap connect command executed for ${ide} at ${new Date().toISOString()}\n`);
-  logStream.end();
-
-  const apiKey = await getKey();
-
-  // VS Code special handling - ask about workspace vs global
-  if (ide === 'vscode') {
-    layout.section();
-    console.log(typography.header('VS Code + GitHub Copilot MCP Configuration'));
-    layout.spacer();
-    console.log(typography.body('Choose where to install VulnZap MCP server:'));
-    layout.spacer();
-
-    const { scope } = await customPrompts.prompt([
-      {
-        type: 'list',
-        name: 'scope',
-        message: 'Installation scope:',
-        choices: [
-          {
-            name: 'Workspace (this project only) - Recommended for teams',
-            value: 'workspace'
-          },
-          {
-            name: 'Global (all VS Code projects) - Recommended for personal use',
-            value: 'global'
-          }
-        ],
-        default: 'workspace'
-      }
-    ]);
-
-    let configPath: string;
-    let configDescription: string;
-
-    if (scope === 'workspace') {
-      configPath = path.join(process.cwd(), '.vscode', 'mcp.json');
-      configDescription = 'Workspace-scoped (this project only)';
-
-      // Ensure .vscode directory exists
-      const workspaceDir = path.dirname(configPath);
-      if (!fs.existsSync(workspaceDir)) {
-        fs.mkdirSync(workspaceDir, { recursive: true });
-      }
-    } else {
-      // Global user settings - we'll use settings.json approach
-      const homeDir = os.homedir();
-      const platform = os.platform();
-
-      if (platform === 'darwin') {
-        configPath = path.join(homeDir, 'Library', 'Application Support', 'Code', 'User', 'settings.json');
-      } else if (platform === 'win32') {
-        configPath = path.join(process.env.APPDATA || path.join(homeDir, 'AppData', 'Roaming'), 'Code', 'User', 'settings.json');
-      } else {
-        configPath = path.join(homeDir, '.config', 'Code', 'User', 'settings.json');
-      }
-
-      configDescription = 'Global (all VS Code projects)';
-    }
-
-    // Read existing config
-    let config = readConfigFile(configPath);
-
-    // For global settings.json, we need to nest under "mcp" key
-    if (scope === 'global') {
-      if (!config) config = {};
-      if (!config.mcp) config.mcp = {};
-
-      // Merge into mcp.servers
-      if (!config.mcp.servers) config.mcp.servers = {};
-      config.mcp.servers.VulnZap = {
-        command: 'npx',
-        args: ['vulnzap', 'mcp'],
-        env: {
-          VULNZAP_API_KEY: '${env:VULNZAP_API_KEY}' // Use environment variable for security
-        }
-      };
-
-      // Inform user about environment variable
-      layout.spacer();
-      console.log(typography.accent('Important: Set environment variable'));
-      console.log(typography.dim('  Add to your shell profile (~/.zshrc or ~/.bashrc):'));
-      console.log(typography.code(`export VULNZAP_API_KEY="${apiKey}"`));
-      layout.spacer();
-    } else {
-      // Workspace: use standard merge
-      config = mergeVulnZapConfig(config, apiKey, ide);
-    }
-
-    // Write configuration
-    writeConfigFile(configPath, config);
-    console.log(typography.success('Configuration updated successfully'));
-
-    // Display helpful information
-    layout.section();
-    console.log(typography.accent('Configuration Summary'));
-    console.log(typography.dim('  MCP Server Name: VulnZap'));
-    console.log(typography.dim(`  Scope: ${configDescription}`));
-    console.log(typography.dim(`  Config Path: ${configPath}`));
-    console.log(typography.dim('  Schema: servers (GitHub Copilot MCP)'));
-    layout.section();
-    console.log(typography.accent('Next Steps:'));
-    console.log(typography.dim('  1. Restart VS Code'));
-    console.log(typography.dim('  2. Open GitHub Copilot Chat'));
-    console.log(typography.dim('  3. VulnZap security tools are now available'));
-    layout.section();
-    return;
-  }
-
-  // JetBrains special handling - ask about location
-  if (ide === 'jetbrains') {
-    layout.section();
-    console.log(typography.header('JetBrains + GitHub Copilot MCP Configuration'));
-    layout.spacer();
-    console.log(typography.body('Choose where to place the MCP configuration:'));
-    layout.spacer();
-
-    const hasIdeaFolder = fs.existsSync(path.join(process.cwd(), '.idea'));
-    const choices = [
-      {
-        name: 'Project root (mcp.json) - Recommended, visible to team',
-        value: 'root'
-      }
-    ];
-
-    if (hasIdeaFolder) {
-      choices.push({
-        name: '.idea folder (.idea/mcp.json) - Hidden from version control',
-        value: 'idea'
-      });
-    }
-
-    const { location } = await customPrompts.prompt([
-      {
-        type: 'list',
-        name: 'location',
-        message: 'Configuration location:',
-        choices,
-        default: 'root'
-      }
-    ]);
-
-    let configPath: string;
-    let configDescription: string;
-
-    if (location === 'idea') {
-      configPath = path.join(process.cwd(), '.idea', 'mcp.json');
-      configDescription = 'Project .idea folder (hidden from VCS)';
-    } else {
-      configPath = path.join(process.cwd(), 'mcp.json');
-      configDescription = 'Project root (visible to team)';
-    }
-
-    // Read existing config
-    let config = readConfigFile(configPath);
-
-    // Merge VulnZap configuration (uses "mcpServers" schema)
-    config = mergeVulnZapConfig(config, apiKey, ide);
-
-    // Write configuration
-    writeConfigFile(configPath, config);
-    console.log(typography.success('Configuration updated successfully'));
-
-    // Display helpful information
-    layout.section();
-    console.log(typography.accent('Configuration Summary'));
-    console.log(typography.dim('  MCP Server Name: VulnZap'));
-    console.log(typography.dim(`  Location: ${configDescription}`));
-    console.log(typography.dim(`  Config Path: ${configPath}`));
-    console.log(typography.dim('  Schema: mcpServers (GitHub Copilot Agent)'));
-    layout.section();
-    console.log(typography.accent('Next Steps:'));
-    console.log(typography.dim('  1. Open Copilot Chat in JetBrains'));
-    console.log(typography.dim('  2. Switch to Agent mode'));
-    console.log(typography.dim('  3. Click MCP tools icon to verify VulnZap appears'));
-    console.log(typography.dim('  4. Enable VulnZap from the MCP server list'));
-    layout.section();
-    console.log(typography.dim('Note: Org admins must enable "MCP servers in Copilot" for Copilot Business/Enterprise'));
-    layout.section();
-    return;
-  }
-
-  // Cursor special handling - ask about workspace vs global
-  if (ide === 'cursor') {
-    layout.section();
-    console.log(typography.header('Cursor + GitHub Copilot MCP Configuration'));
-    layout.spacer();
-    console.log(typography.body('Choose where to install VulnZap MCP server:'));
-    layout.spacer();
-
-    const { scope } = await customPrompts.prompt([
-      {
-        type: 'list',
-        name: 'scope',
-        message: 'Installation scope:',
-        choices: [
-          {
-            name: 'Workspace (this project only) - Recommended for teams',
-            value: 'workspace'
-          },
-          {
-            name: 'Global (all Cursor projects) - Recommended for personal use',
-            value: 'global'
-          }
-        ],
-        default: 'global'
-      }
-    ]);
-
-    let configPath: string;
-    let configDescription: string;
-
-    if (scope === 'workspace') {
-      configPath = path.join(process.cwd(), '.cursor', 'mcp.json');
-      configDescription = 'Workspace-scoped (this project only)';
-
-      // Add rules for cursor for agent to call the mcp tools 
-      const agentRulesFilePath = path.join(process.cwd(), 'AGENTS.md');
-      const agentRulesFileContent = `\n\n### VulnZap MCP Guidelines
-
-## Overview
-Use VulnZap's tools to proactively identify and report security vulnerabilities within the codebase.
-
-## Workflow
-Your primary workflow consists of the following steps:
-
-1. **Start the security assistant**: Call the \`vulnzap_security_assistant\` tool with the path to the directory you intend to work on. This tool will continuously monitor the specified directory for any file changes and automatically trigger security scans.
-
-2. **Retrieve Scan Results**: Once you have completed your changes, call the \`vulnzap_security_assistant_results\` tool to obtain the scan results. This tool also accepts a 'wait' parameter in seconds. If the scan is still in progress, you can re-run the tool with an increased wait time.
-
-3. **Address Vulnerabilities**: Analyze the scan results to identify any vulnerabilities. Use the provided information to implement the necessary fixes. If no vulnerabilities are found, the tool will indicate that the code is secure.
-`;
-      if (!fs.existsSync(agentRulesFilePath)) {
-        fs.writeFileSync(agentRulesFilePath, agentRulesFileContent);
-      } else {
-        // Check if rules already exist, if not, add them
-        const agentRulesFileContent = fs.readFileSync(agentRulesFilePath, 'utf8');
-        if (!agentRulesFileContent.includes("## Rules for using VulnZap and its tools.")) {
-          fs.appendFileSync(agentRulesFilePath, agentRulesFileContent);
-        }
-      }
-
-      // Ensure .cursor directory exists
-      const workspaceDir = path.dirname(configPath);
-      if (!fs.existsSync(workspaceDir)) {
-        fs.mkdirSync(workspaceDir, { recursive: true });
-      }
-    } else {
-      configPath = path.join(os.homedir(), '.cursor', 'mcp.json');
-      configDescription = 'Global (all Cursor projects)';
-    }
-
-    // Read existing config
-    let config = readConfigFile(configPath);
-
-    // Merge VulnZap configuration (uses "servers" schema)
-    config = mergeVulnZapConfig(config, apiKey, ide);
-
-    // Write configuration
-    writeConfigFile(configPath, config);
-    console.log(typography.success('Configuration updated successfully'));
-
-    // Display helpful information
-    layout.section();
-    console.log(typography.accent('Configuration Summary'));
-    console.log(typography.dim('  MCP Server Name: VulnZap'));
-    console.log(typography.dim(`  Scope: ${configDescription}`));
-    console.log(typography.dim(`  Config Path: ${configPath}`));
-    console.log(typography.dim('  Schema: servers (GitHub Copilot MCP)'));
-    console.log(typography.dim('  Transport Type: STDIO'));
-    console.log(typography.dim('  Auto-approved Tools: auto-vulnerability-scan, scan_repo'));
-    layout.section();
-    console.log(typography.accent('To manage this server in Cursor:'));
-    console.log(typography.dim('  1. Click the "MCP Servers" icon in Cursor'));
-    console.log(typography.dim('  2. Find "VulnZap" in the server list'));
-    console.log(typography.dim('  3. Use the toggle switch to enable/disable'));
-    console.log(typography.dim('  4. Works with GitHub Copilot in Cursor'));
-    layout.section();
-    return;
-  }
-
-  // Standard handling for Windsurf, Antigravity, Claude
-  const configPath = getMcpConfigPath(ide);
-
-  if (!configPath) {
-    console.log(typography.error(`Could not determine configuration path for ${ide}`));
-    return;
-  }
-
-  // Read existing config
-  let config = readConfigFile(configPath);
-
-  // Merge VulnZap configuration
-  config = mergeVulnZapConfig(config, apiKey, ide);
-
-  // Write configuration
-  writeConfigFile(configPath, config);
-  console.log(typography.success('Configuration updated successfully'));
-
-  // Display helpful information
-  layout.section();
-  console.log(typography.accent('Configuration Summary'));
-  console.log(typography.dim('  MCP Server Name: VulnZap'));
-  console.log(typography.dim(`  Config Path: ${configPath}`));
-
-  const schemaKey = 'mcpServers';
-  console.log(typography.dim(`  Schema: ${schemaKey}`));
-
-  if (ide === 'windsurf') {
-    layout.section();
-    console.log(typography.accent('To manage this server in Windsurf:'));
-    console.log(typography.dim('  1. Click the "MCP Servers" icon in Windsurf'));
-    console.log(typography.dim('  2. Find "VulnZap" in the server list'));
-    console.log(typography.dim('  3. Use the toggle switch to enable/disable'));
-    console.log(typography.dim('  4. Works with GitHub Copilot in Windsurf'));
-  } else if (ide === 'claude') {
-    layout.section();
-    console.log(typography.accent('Next Steps:'));
-    console.log(typography.dim('  1. Restart Claude Code Desktop'));
-    console.log(typography.dim('  2. Type /mcp in chat or check Settings > Integrations > MCP Servers'));
-    console.log(typography.dim('  3. Verify VulnZap appears in the MCP server list'));
-  } else if (ide === 'antigravity') {
-    layout.section();
-    console.log(typography.accent('Next Steps:'));
-    console.log(typography.dim('  1. Restart Antigravity'));
-    console.log(typography.dim('  2. VulnZap tools are now available'));
-  }
-
   layout.section();
 }

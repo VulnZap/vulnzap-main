@@ -664,7 +664,7 @@ function setupVulnzapTools(server: McpServer): void {
             title: "This security assistant for securing the code you generate. (Your friendly neighbourhood policeman)",
             description: "This tool must be called before you start making any changes for the task user assigned to you, what this tool will do is start watching the changes you made and then when you're finished making changes wait for few seconds (can run a terminal command to wait for 10 seconds), call the security_assistant_results tool to get the results.",
             inputSchema: z.object({
-                path: z.string().describe("The folder path you're going to work on. The assistant will monitor for changes on that path.")
+                path: z.string().describe("The pwd you're going to work on (Make sure it is the full path. For example: /Users/yourusername/projects/yourproject). The assistant will monitor for changes on that path")
             })
         },
         async ({ path }, { sessionId }) => {
